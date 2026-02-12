@@ -1,3 +1,13 @@
+---
+title: KAI API Gateway
+emoji: 🦀
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # KAI API
 
 **Free AI Proxy API** — no signup, no API keys required on the AI side.
