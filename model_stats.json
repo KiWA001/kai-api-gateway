@@ -1,0 +1,14 @@
+{
+  "g4f/gpt-4o": {
+    "success": 0,
+    "failure": 1
+  },
+  "g4f/claude-3.5-sonnet": {
+    "success": 0,
+    "failure": 1
+  },
+  "g4f/gpt-4": {
+    "success": 3,
+    "failure": 0
+  }
+}

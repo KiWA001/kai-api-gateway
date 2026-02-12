@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-AI API — Feel free to AI</title>
+    <meta name="description" content="K-AI API — Free AI proxy API. No signup, no API keys. Feel free to AI.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #16161f;
+            --bg-card-hover: #1c1c28;
+            --border: #2a2a3a;
+            --text-primary: #f0f0f5;
+            --text-secondary: #9898aa;
+            --text-muted: #6b6b80;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            --gradient-hero: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            --radius-lg: 16px;
+            --radius-sm: 8px;
+
+            /* Ranking Colors */
+            --success: #22c55e;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ─── Hero ─── */
+        .hero {
+            text-align: center;
+            padding: 100px 0 80px;
+            background: radial-gradient(circle at top center, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+        }
+
+        .hero h1 {
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: -3px;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .hero .motto {
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .hero .desc {
+            margin-top: 24px;
+            font-size: 18px;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* ─── Section ─── */
+        section {
+            padding: 60px 0;
+            border-top: 1px solid var(--bg-secondary);
+        }
+
+        .section-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title .icon {
+            width: 32px;
+            height: 32px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        /* ─── Endpoint Block ─── */
+        .endpoint-block {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-bottom: 40px;
+        }
+
+        .endpoint-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .endpoint-title h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .endpoint-title p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .method-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+        }
+
+        .method-badge.GET {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        .method-badge.LIVE {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+
+        .endpoint-body {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+        }
+
+        .endpoint-body.full-width {
+            grid-template-columns: 1fr;
+        }
+
+        @media (max-width: 800px) {
+            .endpoint-body {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .endpoint-docs {
+            padding: 24px;
+            border-right: 1px solid var(--border);
+        }
+
+        .endpoint-demo {
+            padding: 24px;
+            background: var(--bg-secondary);
+        }
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            margin-top: 16px;
+        }
+
+        .param-table th {
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .param-table td {
+            padding: 12px 0;
+            /* More padding for ranking */
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        .param-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .param-name {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-hover);
+        }
+
+        .param-desc {
+            color: var(--text-secondary);
+        }
+
+        .param-req {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-left: 6px;
+        }
+
+        /* ─── Interactive Demo ─── */
+        .demo-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .demo-input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .demo-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .demo-select {
+            width: 100%;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 10px;
+            margin-bottom: 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
+        .demo-btn {
+            width: 100%;
+            padding: 10px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .demo-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .demo-btn:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+
+        .demo-response {
+            margin-top: 16px;
+            background: #0d0d14;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            display: none;
+        }
+
+        .demo-response.visible {
+            display: block;
+        }
+
+        .demo-response.success {
+            border-color: rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+        }
+
+        .demo-response.error {
+            border-color: rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        /* ─── Ranking Badges & Styles ─── */
+        .rank-badge {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--text-muted);
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        tr:nth-child(1) .rank-badge {
+            background: #Eab308;
+            color: #000;
+        }
+
+        /* Gold */
+        tr:nth-child(2) .rank-badge {
+            background: #94a3b8;
+            color: #000;
+        }
+
+        /* Silver */
+        tr:nth-child(3) .rank-badge {
+            background: #b45309;
+            color: #fff;
+        }
+
+        /* Bronze */
+
+        .score-good {
+            color: var(--success);
+        }
+
+        .score-bad {
+            color: var(--error);
+        }
+
+        /* ─── Footer ─── */
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="hero">
+        <div class="container">
+            <h1>K-AI API</h1>
+            <p class="motto">Feel free to AI</p>
+            <p class="desc">The completely free AI proxy. No signup. No keys. Just code.</p>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- POST /chat (Basic) -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>Chat Completion</h3>
+                    <p>Send a message and get a response from the best available AI.</p>
+                </div>
+                <span class="method-badge">POST /chat</span>
+            </div>
+            <div class="endpoint-body">
+                <div class="endpoint-docs">
+                    <span class="demo-label">Parameters</span>
+                    <table class="param-table">
+                        <tr>
+                            <td><span class="param-name">message</span></td>
+                            <td><span class="param-desc">Your prompt</span><span class="param-req">(required)</span>
+                            </td>
+                        </tr>
+                    </table>
+                    <br>
+                    <span class="demo-label">Example Request</span>
+                    <div class="demo-response visible" style="color: #a78bfa;">
+                        curl -X POST http://.../chat \
+                        -d '{"message": "Hello world"}'
+                    </div>
+                </div>
+                <div class="endpoint-demo">
+                    <span class="demo-label">Try It Live</span>
+                    <textarea id="chat-basic-input" class="demo-input" rows="3"
+                        placeholder='{"message": "What is AI?"}'>What is the capital of France?</textarea>
+                    <button class="demo-btn" onclick="runDemo('chat-basic')">Run Request ▶</button>
+                    <div id="chat-basic-res" class="demo-response"></div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- POST /search & /deep_research -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>Web Search & Research</h3>
+                    <p>Reverse-engineered web search and deep content gathering. No API keys required.</p>
+                </div>
+                <span class="method-badge">POST /search</span>
+            </div>
+            <div class="endpoint-body">
+                <div class="endpoint-docs">
+                    <span class="demo-label">Endpoints</span>
+                    <ul style="color:var(--text-secondary); font-size:13px; margin-left:18px; margin-bottom:10px;">
+                        <li><code>/search</code>: Standard web search (Links)</li>
+                        <li><code>/deep_research</code>: Deep content gathering (Scraper)</li>
+                    </ul>
+                    <span class="demo-label">Parameters</span>
+                    <table class="param-table">
+                        <tr>
+                            <td><span class="param-name">query</span></td>
+                            <td><span class="param-desc">Search topic</span><span class="param-req">(required)</span>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="endpoint-demo">
+                    <span class="demo-label">Try It Live</span>
+                    <input id="search-query" class="demo-input" placeholder="Query" value="When was Python released?">
+                    <select id="search-mode" class="demo-select">
+                        <option value="search">Simple Search (Links)</option>
+                        <option value="deep">Deep Research (Content Gathering)</option>
+                    </select>
+                    <button class="demo-btn" onclick="runSearch()">Execute Search ▶</button>
+                    <div id="search-res" class="demo-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- POST /chat (Advanced) -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>Chat (Advanced)</h3>
+                    <p>Select specific models, providers, or add system instructions.</p>
+                </div>
+                <span class="method-badge">POST /chat</span>
+            </div>
+            <div class="endpoint-body">
+                <div class="endpoint-docs">
+                    <span class="demo-label">Parameters</span>
+                    <table class="param-table">
+                        <tr>
+                            <td><span class="param-name">model</span></td>
+                            <td><span class="param-desc">Specific model (e.g. gpt-4o)</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name">provider</span></td>
+                            <td><span class="param-desc">Specific provider (g4f, pollinations)</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name">system_prompt</span></td>
+                            <td><span class="param-desc">AI instructions</span></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="endpoint-demo">
+                    <span class="demo-label">Try It Live</span>
+                    <input id="chat-adv-msg" class="demo-input" placeholder="Message" value="Tell me a joke">
+                    <input id="chat-adv-sys" class="demo-input" placeholder="System Prompt" value="Be sarcastic">
+                    <select id="chat-adv-model" class="demo-select">
+                        <option value="">Auto Model (Best Available)</option>
+                        <option value="gpt-4">gpt-4</option>
+                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="gpt-oss-20b">gpt-oss-20b</option>
+                        <option value="mistral-small-3.2">mistral-small-3.2</option>
+                        <option value="bidara">bidara</option>
+                        <option value="chickytutor">chickytutor</option>
+                        <option value="midijourney">midijourney</option>
+                    </select>
+                    <button class="demo-btn" onclick="runDemo('chat-adv')">Run Request ▶</button>
+                    <div id="chat-adv-res" class="demo-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GET /models -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>List Models</h3>
+                    <p>Get all currently available AI models.</p>
+                </div>
+                <span class="method-badge GET">GET /models</span>
+            </div>
+            <div class="endpoint-body">
+                <div class="endpoint-docs">
+                    <p style="color:var(--text-secondary); font-size:14px;">Returns a JSON list of all models supported
+                        by the API, ranked by quality.</p>
+                </div>
+                <div class="endpoint-demo">
+                    <span class="demo-label">Try It Live</span>
+                    <button class="demo-btn" onclick="runDemo('models')">Fetch Models ▶</button>
+                    <div id="models-res" class="demo-response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Ranking Container -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>🏆 Live Model Ranking</h3>
+                    <p>Real-time performance tracked by the engine (Speed & Reliability).</p>
+                </div>
+                <span class="method-badge LIVE">LIVE UPDATES</span>
+            </div>
+            <div class="endpoint-body full-width">
+                <div style="padding: 24px; width: 100%; overflow-x: auto;">
+                    <table class="param-table" id="rankings-table">
+                        <thead>
+                            <tr>
+                                <th width="50">#</th>
+                                <th>Model ID</th>
+                                <th>Score (Speed Weighted)</th>
+                                <th>Avg Time</th>
+                                <th>Success</th>
+                                <th>Fail</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" style="text-align:center; padding: 20px;">Loading live stats...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <footer>K-AI API — Feel free to AI</footer>
+
+    <script>
+        async function runDemo(type) {
+            const resBox = document.getElementById(type + '-res');
+            resBox.className = 'demo-response visible';
+            resBox.textContent = '⏳ Sending request...';
+
+            try {
+                let url = '/chat';
+                let method = 'POST';
+                let body = {};
+
+                if (type === 'chat-basic') {
+                    body = { message: document.getElementById('chat-basic-input').value };
+                } else if (type === 'chat-adv') {
+                    body = {
+                        message: document.getElementById('chat-adv-msg').value,
+                        system_prompt: document.getElementById('chat-adv-sys').value,
+                        model: document.getElementById('chat-adv-model').value
+                    };
+                } else if (type === 'models') {
+                    url = '/models';
+                    method = 'GET';
+                    body = null;
+                }
+
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: body ? JSON.stringify(body) : null
+                });
+
+                const data = await res.json();
+                resBox.className = 'demo-response visible ' + (res.ok ? 'success' : 'error');
+                resBox.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                resBox.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        async function runSearch() {
+            const query = document.getElementById('search-query').value;
+            const mode = document.getElementById('search-mode').value;
+            const resBox = document.getElementById('search-res');
+
+            if (!query) { alert("Please enter a query"); return; }
+
+            resBox.className = 'demo-response visible';
+            resBox.textContent = '⏳ Searching... (Deep Research may take 10s+)';
+
+            const endpoint = mode === 'deep' ? '/deep_research' : '/search';
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                const data = await res.json();
+                resBox.className = 'demo-response visible ' + (res.ok ? 'success' : 'error');
+                resBox.innerText = JSON.stringify(data, null, 2);
+            } catch (e) {
+                resBox.innerText = 'Error: ' + e.message;
+            }
+        }
+
+        // --- Live Ranking Logic ---
+
+        let availableModelsSet = new Set();
+
+        async function fetchRankingStats() {
+            try {
+                // Fetch stats AND available models in parallel
+                const [statsRes, modelsRes] = await Promise.all([
+                    fetch('/admin/stats'),
+                    fetch('/models')
+                ]);
+
+                if (!statsRes.ok) return;
+                const stats = await statsRes.json();
+
+                // Process available models
+                availableModelsSet.clear();
+                if (modelsRes.ok) {
+                    const models = await modelsRes.json();
+                    models.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
+                }
+
+                renderRankingTable(stats);
+            } catch (e) {
+                console.error("Failed to fetch ranking", e);
+            }
+        }
+
+        function calculateScore(s, f, timeMs, cf) {
+            // Score = (Success - Failure * 2) - (AvgTime / 1000)
+            let base = s - (f * 2);
+            let penalty = (timeMs || 0) / 1000.0;
+            let score = base - penalty;
+            if (cf >= 3) return score - 100000;
+            return score;
+        }
+
+        function renderRankingTable(data) {
+            let rows = [];
+            for (let [key, val] of Object.entries(data)) {
+                let score = calculateScore(val.success, val.failure, val.avg_time_ms, val.consecutive_failures);
+                rows.push({ id: key, ...val, score: score });
+            }
+            // Sort by score desc
+            rows.sort((a, b) => b.score - a.score);
+
+            const tbody = document.querySelector('#rankings-table tbody');
+            tbody.innerHTML = '';
+
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px;">No stats available yet. Make a request!</td></tr>';
+                return;
+            }
+
+            rows.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                let scoreClass = row.score > 0 ? 'score-good' : 'score-bad';
+                let timeStr = row.avg_time_ms ? Math.round(row.avg_time_ms) + 'ms' : '-';
+
+                // Determine Status
+                let status = '';
+                // Check if this specific provider/model combo is actually available on THIS server
+                if (!availableModelsSet.has(row.id)) {
+                    status = '<span style="color:#9ca3af; font-size:11px; border:1px solid #374151; padding:2px 6px; border-radius:4px;">OFFLINE (Local Only)</span>';
+                    tr.style.opacity = '0.6';
+                } else if (row.consecutive_failures >= 3) {
+                    status = '<span style="color:#ef4444">⚠️ CRITICAL</span>';
+                } else {
+                    status = '<span style="color:#22c55e">● Active</span>';
+                }
+
+                tr.innerHTML = `
+                    <td><span class="rank-badge">${index + 1}</span></td>
+                    <td><b>${row.id}</b></td>
+                    <td class="${scoreClass}">${row.score.toFixed(2)}</td>
+                    <td>${timeStr}</td>
+                    <td>${row.success}</td>
+                    <td>${row.failure}</td>
+                    <td>${status}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Init Live Ranking
+        fetchRankingStats();
+        setInterval(fetchRankingStats, 5000); // Poll every 5s
+
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K-AI API - Admin Command v2</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap"
+        rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Use a global flag to ensure pie chart only renders once
+        window.pieChartRendered = false;
+    </script>
+
+    <style>
+        :root {
+            --bg: #09090b;
+            --surface: #18181b;
+            --border: #27272a;
+            --text: #e4e4e7;
+            --text-muted: #a1a1aa;
+            --accent: #8b5cf6;
+            /* Violet */
+            --accent-glow: rgba(139, 92, 246, 0.2);
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: 'Inter', sans-serif;
+            letter-spacing: -0.5px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(to right, #fff, #a1a1aa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header .status {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--accent);
+            background: var(--accent-glow);
+            padding: 4px 10px;
+            border-radius: 99px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .card h2 {
+            font-size: 16px;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .stat-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        th {
+            text-align: left;
+            color: var(--text-muted);
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .rank-badge {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--text-muted);
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        tr:nth-child(1) .rank-badge {
+            background: #Eab308;
+            color: #000;
+        }
+
+        /* Gold */
+        tr:nth-child(2) .rank-badge {
+            background: #94a3b8;
+            color: #000;
+        }
+
+        /* Silver */
+        tr:nth-child(3) .rank-badge {
+            background: #b45309;
+            color: #fff;
+        }
+
+        /* Bronze */
+
+        .score-good {
+            color: var(--success);
+        }
+
+        .score-bad {
+            color: var(--error);
+        }
+
+        canvas {
+            max-height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>Admin Command</h1>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span class="status">LIVE SYSTEM MONITOR</span>
+            <button id="btn-test-all" onclick="testAllAI()" style="
+                background: var(--accent); color: white; border: none; padding: 8px 16px; 
+                border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+                Test All AI
+            </button>
+            <button id="btn-clear" onclick="clearStats()" style="
+                background: transparent; color: var(--error); border: 1px solid var(--error); 
+                padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+                Clear Stats
+            </button>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Speed vs Reliability</h2>
+            <canvas id="scatterChart"></canvas>
+        </div>
+        <div class="card">
+            <h2>Provider Distribution</h2>
+            <canvas id="pieChart"></canvas>
+        </div>
+    </div>
+
+    <!-- NEW: Search & Research Block -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h2>Web Search & Deep Research</h2>
+            <span class="status">NEW</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px;">
+            <input id="search-query" type="text" placeholder="Enter search query..." style="
+                background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; 
+                border-radius: 6px; font-family: 'Inter', sans-serif; width: 100%;">
+
+            <select id="search-mode" style="
+                background: var(--surface); border: 1px solid var(--border); color: white; padding: 10px; 
+                border-radius: 6px;">
+                <option value="search">Simple Search</option>
+                <option value="deep">Deep Research</option>
+            </select>
+
+            <button onclick="runSearch()" style="
+                background: var(--accent); color: white; border: none; padding: 10px 20px; 
+                border-radius: 6px; font-weight: 600; cursor: pointer;">
+                Go
+            </button>
+        </div>
+        <div id="search-res"
+            style="
+            margin-top: 15px; background: var(--bg); border: 1px solid var(--border); 
+            border-radius: 6px; padding: 15px; font-family: 'JetBrains Mono', monospace; 
+            font-size: 12px; color: var(--text-muted); white-space: pre-wrap; display: none; max-height: 300px; overflow-y: auto;">
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Live Model Ranking (Time-Weighted)</h2>
+        <div style="overflow-x: auto;">
+            <table id="rankings-table">
+                <thead>
+                    <tr>
+                        <th width="50">#</th>
+                        <th>Model ID</th>
+                        <th>Score</th>
+                        <th>Avg Time</th>
+                        <th>Success</th>
+                        <th>Failure</th>
+                        <th>Consec. Fail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- JS will populate -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="error-console"
+        style="display:none; background:#ef4444; color:white; padding:10px; margin-bottom:20px; border-radius:8px; font-family:monospace;">
+    </div>
+
+    <script>
+        // Global Error Handler for Production Debugging
+        window.onerror = function (msg, url, line, col, error) {
+            const errDiv = document.getElementById('error-console');
+            errDiv.style.display = 'block';
+            errDiv.innerHTML += `<div><strong>Error:</strong> ${msg}<br><small>${url}:${line}:${col}</small></div>`;
+            return false;
+        };
+        // Catch Promise Rejections
+        window.onunhandledrejection = function (event) {
+            const errDiv = document.getElementById('error-console');
+            errDiv.style.display = 'block';
+            errDiv.innerHTML += `<div><strong>Promise Error:</strong> ${event.reason}</div>`;
+        };
+    </script>
+
+    <script>
+
+
+        function calculateScore(s, f, timeMs, cf) {
+            // Replicate python logic
+            // Score = (Success - Failure * 2) - (AvgTime / 1000)
+            // Circuit Breaker: cf >= 3 => -100000
+
+            let base = s - (f * 2);
+            let penalty = (timeMs || 0) / 1000.0;
+            let score = base - penalty;
+
+            if (cf >= 3) return score - 100000;
+            return score;
+        }
+
+        function renderDashboard(data) {
+            // 1. Process Data for Ranking
+            let rows = [];
+            let providerCounts = {};
+            let scatterData = [];
+
+            // data is dict: { "provider/model": {success, failure, avg_time_ms...} }
+
+            for (let [key, val] of Object.entries(data)) {
+                let score = calculateScore(val.success, val.failure, val.avg_time_ms, val.consecutive_failures);
+                rows.push({
+                    id: key,
+                    ...val,
+                    score: score
+                });
+
+                // Provider count
+                let prov = key.split('/')[0];
+                providerCounts[prov] = (providerCounts[prov] || 0) + val.success;
+
+                // Scatter data (Time vs Score)
+                scatterData.push({
+                    x: val.avg_time_ms || 0,
+                    y: score,
+                    id: key
+                });
+            }
+
+            // Sort by score desc
+            rows.sort((a, b) => b.score - a.score);
+
+            // 2. Render Table
+            const tbody = document.querySelector('#rankings-table tbody');
+            tbody.innerHTML = '';
+
+            if (rows.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align:center; padding: 30px; color: var(--text-muted);">
+                            No data available.<br><br>
+                            <button onclick="testAllAI()" style="
+                                background: var(--accent); color: white; border: none; padding: 8px 16px; 
+                                border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+                                Run Initial Test
+                            </button>
+                        </td>
+                    </tr>
+                 `;
+            } else {
+                rows.forEach((row, index) => {
+                    const tr = document.createElement('tr');
+                    let scoreClass = row.score > 0 ? 'score-good' : 'score-bad';
+                    let timeStr = row.avg_time_ms ? Math.round(row.avg_time_ms) + 'ms' : '-';
+
+                    tr.innerHTML = `
+                    <td><span class="rank-badge">${index + 1}</span></td>
+                    <td><b>${row.id}</b></td>
+                    <td class="${scoreClass}">${row.score.toFixed(2)}</td>
+                    <td>${timeStr}</td>
+                    <td>${row.success}</td>
+                    <td>${row.failure}</td>
+                    <td>${row.consecutive_failures > 0 ? '<span style="color:red">⚠️ ' + row.consecutive_failures + '</span>' : '0'}</td>
+                `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // 3. Render Scatter Chart
+            updateScatterChart(scatterData);
+
+            // 4. Render Pie Chart
+            updatePieChart(providerCounts);
+        }
+
+        // --- Charts ---
+        let scatterChart, pieChart;
+
+        function updateScatterChart(data) {
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+
+            if (scatterChart) {
+                // Update existing chart without full re-render to avoid animation
+                scatterChart.data.datasets[0].data = data;
+                scatterChart.update('none'); // 'none' mode disables animation
+                return;
+            }
+
+            // Filter out 0 time (data without stats)
+            const validData = data.filter(d => d.x > 0);
+
+            scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Models',
+                        data: validData,
+                        backgroundColor: '#8b5cf6',
+                        borderColor: '#8b5cf6',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: { duration: 1000 }, // Initial animation
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: { display: true, text: 'Avg Response Time (ms)', color: '#a1a1aa' },
+                            grid: { color: '#27272a' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Score', color: '#a1a1aa' },
+                            grid: { color: '#27272a' }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return context.raw.id + ': ' + context.raw.y.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePieChart(counts) {
+            // STOP updating if already rendered once (User Request)
+            if (window.pieChartRendered) return;
+
+            const ctx = document.getElementById('pieChart').getContext('2d');
+
+            // Mark as rendered so we never touch it again until reload
+            window.pieChartRendered = true;
+
+            pieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        data: Object.values(counts),
+                        backgroundColor: ['#8b5cf6', '#22c55e', '#f59e0b', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: { duration: 1000 },
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#e4e4e7' } }
+                    }
+                }
+            });
+        }
+
+        // Initialize
+        async function init() {
+            await fetchStats();
+            // Poll every 5 seconds
+            setInterval(fetchStats, 5000);
+        }
+
+        // Make globally available for buttons
+        window.fetchStats = async function () {
+            try {
+                const res = await fetch('/admin/stats');
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const stats = await res.json();
+                renderDashboard(stats);
+            } catch (e) {
+                console.error("Failed to fetch stats", e);
+                const tbody = document.querySelector('#rankings-table tbody');
+                // Only show error if table is empty/loading
+                if (!tbody.hasChildNodes() || tbody.innerHTML.trim() === '' || tbody.innerText.includes('Loading')) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--error); text-align:center; padding:20px;">Failed to fetch stats: ${e.message}</td></tr>`;
+                }
+            }
+        };
+
+        // internal helper
+        const fetchStats = window.fetchStats;
+
+        // --- Search Logic ---
+        async function runSearch() {
+            const query = document.getElementById('search-query').value;
+            const mode = document.getElementById('search-mode').value;
+            const resBox = document.getElementById('search-res');
+
+            if (!query) { alert("Please enter a query"); return; }
+
+            resBox.style.display = 'block';
+            resBox.textContent = '⏳ Searching... (Deep Research may take 10s+)';
+            resBox.style.color = 'var(--text-muted)';
+            resBox.style.borderColor = 'var(--border)';
+
+            const endpoint = mode === 'deep' ? '/deep_research' : '/search';
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    resBox.style.borderColor = 'var(--success)';
+                    resBox.style.color = 'var(--text)';
+                    resBox.innerText = JSON.stringify(data, null, 2);
+                } else {
+                    throw new Error(data.error || "Unknown error");
+                }
+            } catch (e) {
+                resBox.style.borderColor = 'var(--error)';
+                resBox.style.color = 'var(--error)';
+                resBox.innerText = 'Error: ' + e.message;
+            }
+        }
+
+        // --- New Actions ---
+
+        async function testAllAI() {
+            const btn = document.getElementById('btn-test-all');
+            const originalText = btn.textContent;
+
+            // Show loading state
+            btn.textContent = "Running Tests... (Parallel)";
+            btn.disabled = true;
+            btn.style.opacity = "0.7";
+
+            try {
+                // Call backend
+                const res = await fetch('/admin/test_all', { method: 'POST' });
+                const results = await res.json();
+
+                console.log("Test Results:", results);
+
+                // Refresh dashboard immediately to show new stats
+                await window.fetchStats();
+
+                // Show simple alert summary? Or just let the dashboard speak for itself.
+                let passed = results.filter(r => r.status === 'PASS').length;
+                let total = results.length;
+                alert(`Test Complete.\nPassed: ${passed}/${total}`);
+
+            } catch (e) {
+                alert("Test Failed: " + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+                btn.style.opacity = "1";
+            }
+        }
+
+        async function clearStats() {
+            if (!confirm("⚠️ ARE YOU SURE?\n\nThis will wipe all model statistics from memory AND the database.\nThis action cannot be undone.")) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-clear');
+            btn.textContent = "Clearing...";
+            btn.disabled = true;
+
+            try {
+                await fetch('/admin/clear_stats', { method: 'POST' });
+                await window.fetchStats(); // Refresh (should be empty)
+                alert("Stats cleared successfully.");
+            } catch (e) {
+                alert("Clear failed: " + e.message);
+            } finally {
+                btn.textContent = "Clear Stats";
+                btn.disabled = false;
+            }
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+
+</html>

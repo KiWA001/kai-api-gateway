@@ -1,0 +1,19 @@
+{
+    "version": 2,
+    "name": "kaiapi-mocha",
+    "builds": [
+        {
+            "src": "main.py",
+            "use": "@vercel/python",
+            "config": {
+                "maxDuration": 60
+            }
+        }
+    ],
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "main.py"
+        }
+    ]
+}
