@@ -153,9 +153,10 @@ class ZaiProvider(BaseProvider):
                 # Wait briefly for "Thinking..." state
                 # We target distinct selectors
                 selectors = [
-                    'button:has-text("Skip")', 
+                    'button:has(span:has-text("Skip"))',
+                    'span:has-text("Skip")',
                     'div[class*="thinking-chain-container"] button',
-                    '.btn-skip'
+                    'button:has-text("Skip")'
                 ]
                 
                 # Check for any of them appearing
