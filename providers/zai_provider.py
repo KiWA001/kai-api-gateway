@@ -4,24 +4,14 @@ Z.ai Provider (Browser-Based)
 Uses Playwright Chromium to interact with https://chat.z.ai/ as a real browser.
 
 Strategy:
-- Keeps a persistent browser context alive (singleton page)
-- Types messages into the textarea, presses Enter
-- Scrapes the AI response from the DOM
-- Captures network requests for analytics/reverse engineering
+- Keeps a PERSISTENT browser instance alive (Singleton) to save 20s startup time.
+- Uses EPHEMERAL contexts (Tabs) per request for robust data isolation.
+- Scrapes the AI response from the DOM.
 
-Why browser-based?
-- Z.ai uses a proprietary x-signature hash + fingerprinting in query params
-- The signature algorithm is obfuscated in their JS bundle
-- Browser-as-proxy is self-healing: uses Z.ai's own JS to generate valid signatures
-
-Limitations:
-- Requires Playwright + Chromium binaries (won't work on Vercel serverless)
-- Slower than direct API calls (~5-15s per message)
-- One request at a time (browser is single-threaded)
-
-Models available:
-- glm-5 (default, best quality)
-- glm-4-flash (faster, lower quality)
+Implementation:
+- Async Playwright (Native integration with FastAPI)
+- Lazy initialization of the browser
+- Auto-recovery if browser crashes
 """
 
 import asyncio
@@ -33,18 +23,18 @@ from config import PROVIDER_MODELS
 
 logger = logging.getLogger("kai_api.zai")
 
-# Singleton browser instance
-_browser_instance = None
-_browser_lock = asyncio.Lock()
-
+# Singleton Global State
+_playwright = None
+_browser = None
+_lock = asyncio.Lock()
 
 class ZaiProvider(BaseProvider):
-    """AI provider using Z.ai via Playwright browser automation."""
+    """AI provider using Z.ai via Persistent Playwright Browser."""
 
     # How long to wait for AI response in DOM (seconds)
     RESPONSE_TIMEOUT = 45
     # How long to wait after page load for JS hydration
-    HYDRATION_DELAY = 3
+    HYDRATION_DELAY = 2
 
     @property
     def name(self) -> str:
@@ -57,10 +47,36 @@ class ZaiProvider(BaseProvider):
     def is_available() -> bool:
         """Check if Playwright is installed and usable."""
         try:
-            from playwright.sync_api import sync_playwright
+            from playwright.async_api import async_playwright
             return True
         except ImportError:
             return False
+
+    async def _ensure_browser(self):
+        """
+        Start the persistent browser if it's not running.
+        Thread-safe via asyncio Lock.
+        """
+        global _playwright, _browser
+        
+        async with _lock:
+            if _browser and _browser.is_connected():
+                return
+
+            logger.info("🚀 Z.ai: Launching Persistent Browser...")
+            from playwright.async_api import async_playwright
+            
+            _playwright = await async_playwright().start()
+            _browser = await _playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",  # Saves RAM on server
+                ],
+            )
+            logger.info("✅ Z.ai: Browser is Ready.")
 
     async def send_message(
         self,
@@ -71,117 +87,96 @@ class ZaiProvider(BaseProvider):
     ) -> dict:
         """
         Send a message via Z.ai browser automation.
-
+        
         Flow:
-        1. Get or create a browser page (singleton)
-        2. If page has an existing chat, start a new one
-        3. Type the prompt, press Enter
-        4. Wait for AI response in DOM
-        5. Scrape and return the response text
+        1. Ensure Browser is running
+        2. Create NEW Context (Ephemeral) -> Clean State
+        3. Create Page
+        4. Chat
+        5. Close Context (Cleanup)
         """
         if not self.is_available():
-            raise RuntimeError("Playwright not installed. Install with: pip install playwright && python -m playwright install chromium")
+            raise RuntimeError("Playwright not installed.")
 
+        await self._ensure_browser()
         selected_model = model or "glm-5"
-
-        # Run browser interaction in executor (Playwright sync API)
-        loop = asyncio.get_event_loop()
-        response_text = await loop.run_in_executor(
-            None,
-            self._browser_chat,
-            prompt,
-            selected_model,
-            system_prompt,
+        
+        # Create Ephemeral Context
+        # This is where we get ISOLATION. Cookies/Storage are fresh.
+        context = await _browser.new_context(
+            viewport={"width": 1280, "height": 720},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/120.0.0.0 Safari/537.36",
+            locale="en-US",
         )
+        
+        # Hide webdriver flag
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        """)
 
-        if not response_text:
-            raise ValueError("Z.ai returned empty response")
+        page = await context.new_page()
 
-        return {
-            "response": response_text,
-            "model": selected_model,
-        }
+        try:
+            logger.info(f"Z.ai request: {selected_model}")
+            
+            # Step 1: Load Page (Fast navigation?)
+            # Since context is new, we must load the site.
+            await page.goto("https://chat.z.ai/", timeout=60000)
+            
+            # Smart waiting for textarea
+            await page.wait_for_selector("textarea", timeout=60000)
+            
+            # Optional: Hydration wait (sometimes needed for event listeners)
+            await asyncio.sleep(self.HYDRATION_DELAY)
 
-    def _browser_chat(self, prompt: str, model: str, system_prompt: str | None) -> str:
+            # Step 2: Type and Send
+            full_prompt = prompt
+            if system_prompt:
+                full_prompt = f"[System: {system_prompt}]\n\n{prompt}"
+
+            await page.click("textarea")
+            await page.keyboard.type(full_prompt, delay=10) # Slightly faster typing
+            await asyncio.sleep(0.3)
+            await page.keyboard.press("Enter")
+            
+            logger.info("Z.ai: Message sent, waiting for response...")
+
+            # Step 3: Wait for response
+            response_text = await self._wait_for_response(page)
+            
+            if not response_text:
+                raise ValueError("Empty response from Z.ai")
+
+            return {
+                "response": response_text,
+                "model": selected_model,
+            }
+
+        except Exception as e:
+            logger.error(f"Z.ai Error: {e}")
+            raise
+        finally:
+            # CRITICAL: Close the context to free memory and clear data
+            await context.close()
+            # We rarely close the browser itself, it stays up for the next request.
+
+    async def _wait_for_response(self, page) -> str:
         """
-        Synchronous browser interaction (runs in thread executor).
-
-        Uses a fresh page per request to avoid state issues.
-        """
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                ],
-            )
-            context = browser.new_context(
-                viewport={"width": 1280, "height": 720},
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/120.0.0.0 Safari/537.36",
-                locale="en-US",
-            )
-            # Hide webdriver flag
-            context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            """)
-
-            page = context.new_page()
-
-            try:
-                # Step 1: Load page
-                logger.info("Z.ai: Loading page...")
-                page.goto("https://chat.z.ai/", timeout=60000)
-                page.wait_for_selector("textarea", timeout=60000)
-                time.sleep(self.HYDRATION_DELAY)
-
-                # Step 2: If model selection is needed, try to switch
-                # (For now, Z.ai defaults to glm-5 which is what we want)
-
-                # Step 3: Type and send
-                full_prompt = prompt
-                if system_prompt:
-                    full_prompt = f"[System: {system_prompt}]\n\n{prompt}"
-
-                textarea = page.query_selector("textarea")
-                textarea.click()
-                page.keyboard.type(full_prompt, delay=15)
-                time.sleep(0.3)
-                page.keyboard.press("Enter")
-                logger.info("Z.ai: Message sent, waiting for response...")
-
-                # Step 4: Wait for response in DOM
-                response_text = self._wait_for_response(page)
-
-                return response_text
-
-            except Exception as e:
-                logger.error(f"Z.ai browser error: {e}")
-                raise
-            finally:
-                browser.close()
-
-    def _wait_for_response(self, page) -> str:
-        """
-        Poll the DOM until the AI response appears and stabilizes.
-        Returns the extracted response text.
+        Async polling for response.
         """
         last_text = ""
         stable_count = 0
-        required_stable = 3  # Text must be unchanged for 3 consecutive checks
-
-        for i in range(self.RESPONSE_TIMEOUT * 2):  # Check every 0.5s
-            time.sleep(0.5)
-
-            current_text = page.evaluate("""
+        required_stable = 3
+        
+        # Polling loop
+        for i in range(self.RESPONSE_TIMEOUT * 2):
+            await asyncio.sleep(0.5)
+            
+            # Evaluate DOM
+            current_text = await page.evaluate("""
                 () => {
-                    // Z.ai renders responses in elements with 'prose' class
-                    // or various message containers
                     const selectors = [
                         '.prose',
                         '[data-message-role="assistant"]',
@@ -190,25 +185,22 @@ class ZaiProvider(BaseProvider):
                         '.markdown-body',
                         '[class*="assistant"]',
                     ];
-
                     for (const sel of selectors) {
                         const els = document.querySelectorAll(sel);
                         if (els.length > 0) {
                             const last = els[els.length - 1];
                             const text = last.innerText || last.textContent || '';
-                            if (text.trim().length > 0) {
-                                return text.trim();
-                            }
+                            if (text.trim().length > 0) return text.trim();
                         }
                     }
                     return '';
                 }
             """)
-
+            
             if not current_text:
                 continue
 
-            # Remove "Thinking..." prefix if present
+            # Clean "Thinking..."
             clean = current_text
             for prefix in ["Thinking...\nSkip\n", "Thinking...\n"]:
                 if clean.startswith(prefix):
@@ -217,83 +209,35 @@ class ZaiProvider(BaseProvider):
             if clean == last_text and len(clean) > 0:
                 stable_count += 1
                 if stable_count >= required_stable:
-                    # Response has stabilized — extract final answer
                     return self._extract_final_answer(clean)
             else:
                 stable_count = 0
                 last_text = clean
-
-            # Log progress every 5 seconds
+                
             if i % 10 == 9:
-                logger.info(f"Z.ai: Waiting... ({(i+1)/2:.0f}s, {len(last_text)} chars so far)")
+                logger.info(f"Z.ai: Stream... {len(last_text)} chars")
 
-        # Timeout — return whatever we have
         if last_text:
-            logger.warning(f"Z.ai: Timeout, returning partial response ({len(last_text)} chars)")
-            return self._extract_final_answer(last_text)
-
-        raise TimeoutError(f"Z.ai did not respond within {self.RESPONSE_TIMEOUT}s")
+             logger.warning("Z.ai: Timeout, returning partial.")
+             return self._extract_final_answer(last_text)
+             
+        raise TimeoutError("Z.ai no response")
 
     def _extract_final_answer(self, text: str) -> str:
-        """
-        Extract just the final answer from Z.ai response.
-        Z.ai's GLM-5 thinking model outputs reasoning + answer.
-        We want only the answer portion.
-        """
-        # Strip common prefixes
+        """Extract answer from thinking chain."""
         clean = text.strip()
-        
         for prefix in ["Thinking...\nSkip\n", "Thinking...\n"]:
             if clean.startswith(prefix):
                 clean = clean[len(prefix):]
-
-        # Try to find the boundary between thinking and answer
-        thinking_markers = [
-            "Thought Process\n",
-            "Analysis\n",
-            "Reasoning\n",
-            "Step-by-step\n",
-        ]
-        
-        candidates = []
-        
-        # Strategy 1: Split by Thinking Markers
-        for marker in thinking_markers:
-            if clean.startswith(marker):
-                # The thinking block usually ends with a double newline
-                # But sometimes it's hard to tell where thinking ends and answer begins.
-                # However, usually the answer is at the very end.
-                parts = clean.split("\n\n")
                 
-                # Filter out the "Thought Process" header part if it's the first one
-                if parts and marker.strip() in parts[0]:
-                    parts = parts[1:]
-                
-                candidates = parts
-                break
+        # Split by double newlines to find paragraphs
+        parts = clean.split("\\n\\n")
         
-        if not candidates:
-            candidates = clean.split("\n\n")
-
-        # Reverse iterate to find the best "Answer" candidate
-        # We need to skip UI artifacts like "Here is the breakdown:\nStrawberry"
-        for i in range(len(candidates) - 1, -1, -1):
-            para = candidates[i].strip()
-            if not para:
-                continue
-            
-            # Heuristics to skip UI noise:
-            # 1. Very short and ends with colon (e.g. "Here is the breakdown:")
-            if len(para) < 30 and para.endswith(":"):
-                continue
-            # 2. Just one or two words (likely a label or artifact)
-            if len(para.split()) < 3 and not para.endswith((".", "!", "?", '"')):
-                continue
-            # 3. Specific UI strings seen in Z.ai
-            if "Here is the breakdown" in para or "Strawberry" == para:
-                continue
-                
-            return para
-            
-        # Fallback: return the whole cleaned text if we couldn't find a specific paragraph
+        # If it looks like thinking process, skip the first part
+        if "Thought Process" in clean[:50]:
+             # Heuristic: The last big chunk is usually the answer
+             pass
+             
+        # For now, return full clean text as Z.ai mostly outputs good markdown
         return clean
+
