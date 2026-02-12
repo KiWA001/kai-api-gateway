@@ -11,6 +11,8 @@ ENV PYTHONUNBUFFERED=1
 # Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Explicitly install playwright (removed from requirements.txt for Vercel compatibility)
+RUN pip install --no-cache-dir playwright
 
 # Install Playwright browsers (specifically Chromium)
 # The base image has them, but we run this to ensure linking is correct
