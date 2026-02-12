@@ -8,7 +8,7 @@ Strategy:
 - Uses EPHEMERAL contexts (Tabs) per request for robust data isolation.
 - Scrapes the AI response from the DOM.
 - Skips "Thinking..." animation to speed up response.
-- Aggressively cleans "Thought Process" artifacts using Block Filtering.
+- Aggressively cleans "Thought Process" artifacts using Block Filtering & Heuristics.
 
 Implementation:
 - Async Playwright (Native integration with FastAPI)
@@ -262,57 +262,63 @@ class ZaiProvider(BaseProvider):
     def _extract_final_answer(self, text: str) -> str:
         """
         Extract just the final answer from Z.ai response.
-        Removes 'Thought Process' via aggressive block filtering.
+        Removes 'Thought Process' artifacts.
+        Strategy: Block-based filtering.
         """
         clean = self._clean_thinking(text)
         
-        # Split by double newlines or single newlines if they delineate distinct blocks.
-        # Z.ai sometimes uses \n for blocks.
-        # Let's try splitting by \n first, then grouping?
-        # No, \n might be inside a paragraph. 
-        # But for 'Thought Process', it usually is followed by a newline.
+        # 1. Check for explicit "Thought Process" Header
+        has_header = "thought process" in clean.lower()[:50]
         
-        # If we detect "Thought Process" at start, we go into aggressive filtering mode.
-        if clean.startswith("Thought Process"):
-             # Regex: Remove everything from start until the matching newline that is followed by Answer.
-             # Heuristic: The Answer block usually starts after the content associated with 'Thought Process'.
-             
-             # If double newlines exist, use them as block separators.
-             if "\n\n" in clean:
-                 blocks = clean.split("\n\n")
-             else:
-                 # Fallback: Split by single newline if no double newlines found.
-                 # This handles the user's specific example.
-                 blocks = clean.split("\n")
+        # 2. Check for Implicit Thought Indicators (Headerless)
+        # Scan first 300 chars for giveaways
+        intro = clean.lower()[:300]
+        thought_indicators = [
+            "let me consider",
+            "the user has",
+            "the user said",
+            "i need to",
+            "i'll extend",
+            "i will",
+            "let me formulate",
+            "analysis:",
+        ]
+        has_indicator = any(ind in intro for ind in thought_indicators)
+        
+        # If no thoughts detected, return whole text
+        if not has_header and not has_indicator:
+            return clean
 
-             # Filter blocks that look like thoughts
-             filtered = []
-             thought_markers = ["thought process", "analysis:", "user said", "i should", "i will", "considering"]
-             
-             # Always drop the first one if it includes "Thought Process"
-             if blocks and "thought process" in blocks[0].lower():
-                 pass # Drop
-             else:
-                 filtered.append(blocks[0])
-                 
-             for block in blocks[1:]:
-                 is_thought = False
-                 lb = block.lower().strip()
-                 # If block is empty, skip? No, keep structure.
-                 if not lb: continue
-                 
-                 for m in thought_markers:
-                     if lb.startswith(m):
-                         is_thought = True
-                         break
-                 
-                 if not is_thought:
-                     filtered.append(block)
-             
-             if not filtered:
-                 return blocks[-1]
-                 
-             joiner = "\n\n" if "\n\n" in clean else "\n"
-             return joiner.join(filtered)
+        # Block Processing
+        # Split by empty lines (paragraphs)
+        if "\n\n" in clean:
+             blocks = clean.split("\n\n")
+             joiner = "\n\n"
+        else:
+             blocks = clean.split("\n")
+             joiner = "\n"
 
-        return clean
+        blocks = [b.strip() for b in blocks if b.strip()]
+        
+        if not blocks:
+            return clean
+            
+        # AGGRESSIVE FILTERING:
+        # If we detected thoughts, we assume the AI streamed thoughts first.
+        # User explicitly requested: "remove everything before the last \n"
+        # This translates to: Return the LAST BLOCK.
+        
+        # Note: This is safe IF the indicators are present.
+        # If the indicators are present, it means the FIRST part is definitely garbage.
+        # And Z.ai (GLM) almost always structure output as [Thoughts] \n [Response].
+        
+        # Double check: If we have multiple blocks, return the last one.
+        if len(blocks) > 1:
+             logger.info("🗑️ Z.ai: Detected thoughts, applying aggressive filter (returning last block).")
+             return blocks[-1]
+        
+        # If only 1 block but indicators present... we might want to strip specific lines?
+        # But usually thoughts + answer are separate blocks.
+        # If 1 block, maybe valid answer? Or maybe whole block is thought?
+        # Return strict last block (which is the only block).
+        return blocks[-1]
