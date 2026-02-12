@@ -5,9 +5,8 @@ Uses Playwright Chromium to interact with https://chat.z.ai/ as a real browser.
 
 Strategy:
 - Keeps a PERSISTENT browser instance alive (Singleton) to save 20s startup time.
-- Keeps a PERSISTENT context/tab alive (reused) to save 15s page load time.
-- Uses `localStorage.clear()` and System Prompts to "Forget" previous chat.
-- Recycles the context every 50 requests to prevent memory leaks.
+- Uses EPHEMERAL contexts (Tabs) per request for robust data isolation.
+- Scrapes the AI response from the DOM.
 
 Implementation:
 - Async Playwright (Native integration with FastAPI)
@@ -35,14 +34,7 @@ class ZaiProvider(BaseProvider):
     # How long to wait for AI response in DOM (seconds)
     RESPONSE_TIMEOUT = 45
     # How long to wait after page load for JS hydration
-    HYDRATION_DELAY = 2
-    # Restart browser context after N requests to clear memory
-    MAX_REQUESTS_BEFORE_RESTART = 50
-
-    def __init__(self):
-        self.context = None
-        self.page = None
-        self.request_count = 0
+    HYDRATION_DELAY = 1.5
 
     @property
     def name(self) -> str:
@@ -67,66 +59,24 @@ class ZaiProvider(BaseProvider):
         """
         global _playwright, _browser
         
-        # We need a separate lock for browser startup vs page usage
-        if _browser and _browser.is_connected():
-            return
+        async with _lock:
+            if _browser and _browser.is_connected():
+                return
 
-        logger.info("🚀 Z.ai: Launching Persistent Browser...")
-        from playwright.async_api import async_playwright
-        
-        _playwright = await async_playwright().start()
-        _browser = await _playwright.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",  # Saves RAM on server
-            ],
-        )
-        logger.info("✅ Z.ai: Browser is Ready.")
-
-    async def _ensure_page(self):
-        """
-        Ensure we have a valid page and context ready for use.
-        Recycles context every MAX_REQUESTS.
-        """
-        # Periodic Recycle (Hard Reset)
-        if self.request_count >= self.MAX_REQUESTS_BEFORE_RESTART:
-            logger.info(f"♻️ Z.ai: Recycling Context (Requests: {self.request_count})...")
-            if self.context:
-                await self.context.close()
-            self.context = None
-            self.page = None
-            self.request_count = 0
-
-        # Create New Context if needed
-        if not self.context:
-            self.context = await _browser.new_context(
-                viewport={"width": 1280, "height": 720},
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/120.0.0.0 Safari/537.36",
-                locale="en-US",
-            )
-            # Hide webdriver
-            await self.context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            """)
-            self.page = await self.context.new_page()
+            logger.info("🚀 Z.ai: Launching Persistent Browser...")
+            from playwright.async_api import async_playwright
             
-            # Initial Load (The Slow Part - happens once per 50 reqs)
-            logger.info("⏳ Z.ai: Loading Page (Initial)...")
-            await self.page.goto("https://chat.z.ai/", timeout=60000, wait_until='domcontentloaded')
-            try:
-                await self.page.wait_for_selector("textarea", timeout=60000)
-            except Exception:
-                # Retry once if fail
-                await self.page.reload()
-                await self.page.wait_for_selector("textarea", timeout=60000)
-                
-            # Hydration wait
-            await asyncio.sleep(self.HYDRATION_DELAY)
+            _playwright = await async_playwright().start()
+            _browser = await _playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",  # Saves RAM on server
+                ],
+            )
+            logger.info("✅ Z.ai: Browser is Ready.")
 
     async def send_message(
         self,
@@ -136,64 +86,81 @@ class ZaiProvider(BaseProvider):
         **kwargs,
     ) -> dict:
         """
-        Send a message via Z.ai browser automation (Persistent Page).
+        Send a message via Z.ai browser automation.
+        
+        Flow:
+        1. Ensure Browser is running
+        2. Create NEW Context (Ephemeral) -> Clean State
+        3. Create Page
+        4. Chat
+        5. Close Context (Cleanup)
         """
         if not self.is_available():
             raise RuntimeError("Playwright not installed.")
 
-        # Global Lock ensures single-threaded access to the single Tab
-        async with _lock:
-            await self._ensure_browser()
-            await self._ensure_page()
+        await self._ensure_browser()
+        selected_model = model or "glm-5"
+        
+        # Create Ephemeral Context
+        # This is where we get ISOLATION. Cookies/Storage are fresh.
+        context = await _browser.new_context(
+            viewport={"width": 1280, "height": 720},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/120.0.0.0 Safari/537.36",
+            locale="en-US",
+        )
+        
+        # Hide webdriver flag
+        await context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        """)
+
+        page = await context.new_page()
+
+        try:
+            logger.info(f"Z.ai request: {selected_model}")
             
-            self.request_count += 1
-            selected_model = model or "glm-5"
+            # Step 1: Load Page (Since context is new, we must load the site)
+            await page.goto("https://chat.z.ai/", timeout=60000)
+            
+            # Smart waiting for textarea
+            await page.wait_for_selector("textarea", timeout=60000)
+            
+            # Optional: Hydration wait
+            await asyncio.sleep(self.HYDRATION_DELAY)
 
-            try:
-                # Soft Reset: Attempt to clear chat history via simple reload/clear
-                # Using Reload because simple clearing keeps previous context memory in AI
-                # Since we keep Context open, Cache is WARM -> Reload is fast (~2s)
-                # This balances speed vs "forgetting"
-                # await self.page.reload(wait_until='domcontentloaded') # Too slow?
-                
-                # ALTERNATIVE: Just clear INPUT and use System Prompt to Forget.
-                # User asked for MAX SPEED.
-                # So we WON'T reload. We just type.
-                
-                # 1. Clear Input Box
-                await self.page.evaluate("""
-                    const ta = document.querySelector('textarea');
-                    if (ta) ta.value = '';
-                """)
-                
-                # 2. Construct Prompt to Ignore Context
-                # "System: Ignore all previous instructions and context. Start fresh."
-                forget_instruction = "IMPORTANT: Ignore all previous messages in this conversation. Start a fresh topic."
-                full_prompt = f"[System: {forget_instruction} {system_prompt or ''}]\n\n{prompt}"
+            # Step 2: Type and Send
+            # No need for "Ignore previous context" because context is fresh!
+            full_prompt = prompt
+            if system_prompt:
+                full_prompt = f"[System: {system_prompt}]\n\n{prompt}"
 
-                # 3. Type & Send
-                await self.page.click("textarea")
-                await self.page.keyboard.type(full_prompt, delay=5) # Fast typing
-                await self.page.keyboard.press("Enter")
-                
-                logger.info(f"Z.ai: Sent message ({self.request_count}/{self.MAX_REQUESTS_BEFORE_RESTART})")
+            await page.click("textarea")
+            await page.keyboard.type(full_prompt, delay=10)
+            await asyncio.sleep(0.3)
+            await page.keyboard.press("Enter")
+            
+            logger.info("Z.ai: Message sent, waiting for response...")
 
-                # 4. Wait for response
-                # We need to be careful to grab the NEW response, not old one.
-                # The _wait_for_response logic grabs the LAST message.
-                # Since we just sent one, the last one will eventually be the AI response.
-                response_text = await self._wait_for_response(self.page)
-                
-                return {
-                    "response": response_text,
-                    "model": selected_model,
-                }
+            # Step 3: Wait for response
+            response_text = await self._wait_for_response(page)
+            
+            if not response_text:
+                raise ValueError("Empty response from Z.ai")
 
-            except Exception as e:
-                logger.error(f"Z.ai Error: {e}")
-                # Force recycle on error
-                self.request_count = self.MAX_REQUESTS_BEFORE_RESTART
-                raise
+            return {
+                "response": response_text,
+                "model": selected_model,
+            }
+
+        except Exception as e:
+            logger.error(f"Z.ai Error: {e}")
+            raise
+        finally:
+            # CRITICAL: Close the context to free memory and clear data
+            await context.close()
+            # We rarely close the browser itself, it stays up for the next request.
 
     async def _wait_for_response(self, page) -> str:
         """
@@ -230,10 +197,6 @@ class ZaiProvider(BaseProvider):
                 }
             """)
             
-            # Smart check: If text is same as PREVIOUS request's answer...
-            # But we don't know previous answer easily without state.
-            # However, AI takes time to think. "Thinking..." usually appears first.
-            
             if not current_text:
                 continue
 
@@ -266,11 +229,13 @@ class ZaiProvider(BaseProvider):
         for prefix in ["Thinking...\nSkip\n", "Thinking...\n"]:
             if clean.startswith(prefix):
                 clean = clean[len(prefix):]
+                
+        # Split by double newlines to find paragraphs
+        parts = clean.split("\\n\\n")
         
         # If it looks like thinking process, skip the first part
-        # Heuristic: The last big chunk is usually the answer
-        parts = clean.split("\\n\\n")
-        if "Thought Process" in clean[:50] and len(parts) > 1:
-             return parts[-1]
+        if "Thought Process" in clean[:50]:
+             pass
              
+        # For now, return full clean text as Z.ai mostly outputs good markdown
         return clean
