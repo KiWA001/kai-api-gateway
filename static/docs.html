@@ -10,6 +10,8 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-primary: #0a0a0f;
@@ -355,6 +357,12 @@
             color: var(--error);
         }
 
+        /* Charts */
+        canvas {
+            max-height: 250px;
+            width: 100%;
+        }
+
         /* ─── Footer ─── */
         footer {
             text-align: center;
@@ -526,7 +534,7 @@
         <div class="endpoint-block">
             <div class="endpoint-header">
                 <div class="endpoint-title">
-                    <h3>🏆 Live Model Ranking</h3>
+                    <h3>🏆 Live Model Ranking (Time-Weighted)</h3>
                     <p>Real-time performance tracked by the engine (Speed & Reliability).</p>
                 </div>
                 <span class="method-badge LIVE">LIVE UPDATES</span>
@@ -538,7 +546,7 @@
                             <tr>
                                 <th width="50">#</th>
                                 <th>Model ID</th>
-                                <th>Score (Speed Weighted)</th>
+                                <th>Score</th>
                                 <th>Avg Time</th>
                                 <th>Success</th>
                                 <th>Fail</th>
@@ -555,11 +563,36 @@
             </div>
         </div>
 
+        <!-- Network Analytics (Graphs) -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>Network Analytics</h3>
+                    <p>Live Latency vs. Reliability & Provider Distribution.</p>
+                </div>
+            </div>
+            <div class="endpoint-body" style="grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px;">
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;">
+                    <h4 style="margin-bottom:10px; color:var(--text-secondary); font-size:12px; font-weight:700;">SPEED
+                        vs RELIABILITY</h4>
+                    <canvas id="scatterChart"></canvas>
+                </div>
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px;">
+                    <h4 style="margin-bottom:10px; color:var(--text-secondary); font-size:12px; font-weight:700;">
+                        PROVIDER DISTRIBUTION</h4>
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <footer>K-AI API — Feel free to AI</footer>
 
     <script>
+        // Global flag for Pie Chart
+        window.pieChartRendered = false;
+
         async function runDemo(type) {
             const resBox = document.getElementById(type + '-res');
             resBox.className = 'demo-response visible';
@@ -627,10 +660,10 @@
         // --- Live Ranking Logic ---
 
         let availableModelsSet = new Set();
+        let scatterChart, pieChart;
 
         async function fetchRankingStats() {
             try {
-                // Fetch stats AND available models in parallel
                 const [statsRes, modelsRes] = await Promise.all([
                     fetch('/admin/stats'),
                     fetch('/models')
@@ -639,21 +672,19 @@
                 if (!statsRes.ok) return;
                 const stats = await statsRes.json();
 
-                // Process available models
                 availableModelsSet.clear();
                 if (modelsRes.ok) {
                     const models = await modelsRes.json();
                     models.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
                 }
 
-                renderRankingTable(stats);
+                renderDashboard(stats);
             } catch (e) {
                 console.error("Failed to fetch ranking", e);
             }
         }
 
         function calculateScore(s, f, timeMs, cf) {
-            // Score = (Success - Failure * 2) - (AvgTime / 1000)
             let base = s - (f * 2);
             let penalty = (timeMs || 0) / 1000.0;
             let score = base - penalty;
@@ -661,56 +692,130 @@
             return score;
         }
 
-        function renderRankingTable(data) {
+        function renderDashboard(data) {
             let rows = [];
+            let providerCounts = {};
+            let scatterData = [];
+
             for (let [key, val] of Object.entries(data)) {
                 let score = calculateScore(val.success, val.failure, val.avg_time_ms, val.consecutive_failures);
                 rows.push({ id: key, ...val, score: score });
+
+                // Provider stats for Pie
+                let prov = key.split('/')[0];
+                providerCounts[prov] = (providerCounts[prov] || 0) + val.success;
+
+                // Scatter Data
+                scatterData.push({
+                    x: val.avg_time_ms || 0,
+                    y: score,
+                    id: key
+                });
             }
-            // Sort by score desc
             rows.sort((a, b) => b.score - a.score);
 
+            // Render Table
             const tbody = document.querySelector('#rankings-table tbody');
             tbody.innerHTML = '';
 
             if (rows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px;">No stats available yet. Make a request!</td></tr>';
-                return;
+            } else {
+                rows.forEach((row, index) => {
+                    const tr = document.createElement('tr');
+                    let scoreClass = row.score > 0 ? 'score-good' : 'score-bad';
+                    let timeStr = row.avg_time_ms ? Math.round(row.avg_time_ms) + 'ms' : '-';
+
+                    let status = '';
+                    if (!availableModelsSet.has(row.id)) {
+                        status = '<span style="color:#9ca3af; font-size:11px; border:1px solid #374151; padding:2px 6px; border-radius:4px;">OFFLINE (Local Only)</span>';
+                        tr.style.opacity = '0.6';
+                    } else if (row.consecutive_failures >= 3) {
+                        status = '<span style="color:#ef4444">⚠️ CRITICAL</span>';
+                    } else {
+                        status = '<span style="color:#22c55e">● Active</span>';
+                    }
+
+                    tr.innerHTML = `
+                         <td><span class="rank-badge">${index + 1}</span></td>
+                         <td><b>${row.id}</b></td>
+                         <td class="${scoreClass}">${row.score.toFixed(2)}</td>
+                         <td>${timeStr}</td>
+                         <td>${row.success}</td>
+                         <td>${row.failure}</td>
+                         <td>${status}</td>
+                     `;
+                    tbody.appendChild(tr);
+                });
             }
 
-            rows.forEach((row, index) => {
-                const tr = document.createElement('tr');
-                let scoreClass = row.score > 0 ? 'score-good' : 'score-bad';
-                let timeStr = row.avg_time_ms ? Math.round(row.avg_time_ms) + 'ms' : '-';
+            // Render Charts
+            updateScatterChart(scatterData);
+            updatePieChart(providerCounts);
+        }
 
-                // Determine Status
-                let status = '';
-                // Check if this specific provider/model combo is actually available on THIS server
-                if (!availableModelsSet.has(row.id)) {
-                    status = '<span style="color:#9ca3af; font-size:11px; border:1px solid #374151; padding:2px 6px; border-radius:4px;">OFFLINE (Local Only)</span>';
-                    tr.style.opacity = '0.6';
-                } else if (row.consecutive_failures >= 3) {
-                    status = '<span style="color:#ef4444">⚠️ CRITICAL</span>';
-                } else {
-                    status = '<span style="color:#22c55e">● Active</span>';
+        function updateScatterChart(data) {
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+            if (scatterChart) {
+                scatterChart.data.datasets[0].data = data;
+                scatterChart.update('none');
+                return;
+            }
+            const validData = data.filter(d => d.x > 0);
+            scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Models',
+                        data: validData,
+                        backgroundColor: '#8b5cf6',
+                        borderColor: '#8b5cf6',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 1000 },
+                    scales: {
+                        x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Time (ms)', color: '#6b6b80' }, grid: { color: '#2a2a3a' } },
+                        y: { title: { display: true, text: 'Score', color: '#6b6b80' }, grid: { color: '#2a2a3a' } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => ctx.raw.id + ': ' + ctx.raw.y.toFixed(2) } }
+                    }
                 }
+            });
+        }
 
-                tr.innerHTML = `
-                    <td><span class="rank-badge">${index + 1}</span></td>
-                    <td><b>${row.id}</b></td>
-                    <td class="${scoreClass}">${row.score.toFixed(2)}</td>
-                    <td>${timeStr}</td>
-                    <td>${row.success}</td>
-                    <td>${row.failure}</td>
-                    <td>${status}</td>
-                `;
-                tbody.appendChild(tr);
+        function updatePieChart(counts) {
+            if (window.pieChartRendered) return;
+            const ctx = document.getElementById('pieChart').getContext('2d');
+            window.pieChartRendered = true;
+            pieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        data: Object.values(counts),
+                        backgroundColor: ['#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 1000 },
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#9898aa', font: { size: 10 } } }
+                    }
+                }
             });
         }
 
         // Init Live Ranking
         fetchRankingStats();
-        setInterval(fetchRankingStats, 5000); // Poll every 5s
+        setInterval(fetchRankingStats, 5000);
 
     </script>
 
