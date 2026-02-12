@@ -22,6 +22,11 @@ COPY . .
 # Create a non-root user (Hugging Face Spaces requirement)
 # UID 1000 is taken by the base image, so we use 1001
 RUN useradd -m -u 1001 user
+
+# Ensure the user owns the application directory
+# This is CRITICAL for g4f/playwright to write temporary files/caches
+RUN chown -R user:user /app
+
 USER user
 ENV HOME=/home/user
 ENV PATH=$HOME/.local/bin:$PATH
