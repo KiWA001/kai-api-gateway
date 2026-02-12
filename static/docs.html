@@ -664,9 +664,10 @@
 
         async function fetchRankingStats() {
             try {
+                const t = new Date().getTime();
                 const [statsRes, modelsRes] = await Promise.all([
-                    fetch('/admin/stats'),
-                    fetch('/models')
+                    fetch(`/admin/stats?t=${t}`),
+                    fetch(`/models?t=${t}`)
                 ]);
 
                 if (!statsRes.ok) {
@@ -677,8 +678,13 @@
                 availableModelsSet.clear();
                 if (modelsRes.ok) {
                     const data = await modelsRes.json();
-                    if (data.models && Array.isArray(data.models)) {
-                        data.models.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
+                    // Robust handling: Support both array and object wrapper
+                    const modelsList = Array.isArray(data) ? data : (data.models || []);
+
+                    if (Array.isArray(modelsList)) {
+                        modelsList.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
+                    } else {
+                        console.error("Expected array but got:", data);
                     }
                 }
 
