@@ -19,8 +19,9 @@ RUN playwright install chromium
 # Copy application code
 COPY . .
 
-# Create a non-root user (Hugging Face Spaces requires this for security)
-RUN useradd -m -u 1000 user
+# Create a non-root user (Hugging Face Spaces requirement)
+# UID 1000 is taken by the base image, so we use 1001
+RUN useradd -m -u 1001 user
 USER user
 ENV HOME=/home/user
 ENV PATH=$HOME/.local/bin:$PATH
