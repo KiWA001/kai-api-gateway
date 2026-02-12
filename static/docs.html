@@ -676,8 +676,10 @@
 
                 availableModelsSet.clear();
                 if (modelsRes.ok) {
-                    const models = await modelsRes.json();
-                    models.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
+                    const data = await modelsRes.json();
+                    if (data.models && Array.isArray(data.models)) {
+                        data.models.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
+                    }
                 }
 
                 renderDashboard(stats);
