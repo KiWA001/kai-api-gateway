@@ -7,6 +7,8 @@ Strategy:
 - Keeps a PERSISTENT browser instance alive (Singleton) to save 20s startup time.
 - Uses EPHEMERAL contexts (Tabs) per request for robust data isolation.
 - Scrapes the AI response from the DOM.
+- Skips "Thinking..." animation to speed up response.
+- Aggressively cleans "Thought Process" artifacts.
 
 Implementation:
 - Async Playwright (Native integration with FastAPI)
@@ -16,6 +18,7 @@ Implementation:
 
 import asyncio
 import logging
+import re
 import time
 import json
 from providers.base import BaseProvider
@@ -93,7 +96,9 @@ class ZaiProvider(BaseProvider):
         2. Create NEW Context (Ephemeral) -> Clean State
         3. Create Page
         4. Chat
-        5. Close Context (Cleanup)
+        5. Skip Thinking (Click button)
+        6. Wait for response
+        7. Close Context (Cleanup)
         """
         if not self.is_available():
             raise RuntimeError("Playwright not installed.")
@@ -131,7 +136,6 @@ class ZaiProvider(BaseProvider):
             await asyncio.sleep(self.HYDRATION_DELAY)
 
             # Step 2: Type and Send
-            # No need for "Ignore previous context" because context is fresh!
             full_prompt = prompt
             if system_prompt:
                 full_prompt = f"[System: {system_prompt}]\n\n{prompt}"
@@ -141,7 +145,38 @@ class ZaiProvider(BaseProvider):
             await asyncio.sleep(0.3)
             await page.keyboard.press("Enter")
             
-            logger.info("Z.ai: Message sent, waiting for response...")
+            logger.info("Z.ai: Message sent...")
+
+            # --- OPTIMIZATION: SKIP THINKING ---
+            # Attempt to click "Skip" button to bypass animation
+            # Targeted Selector based on user screenshot: div[class*="thinking-chain-container"] button
+            try:
+                # Wait briefly for "Thinking..." state
+                # We target distinct selectors that might appear
+                selectors = [
+                    'button:has-text("Skip")', 
+                    'div[class*="thinking-chain-container"] button',
+                    '.btn-skip'
+                ]
+                
+                # Check for any of them appearing
+                skip_btn = None
+                for sel in selectors:
+                     try:
+                         # Very short timeout, we want to be fast
+                         skip_btn = await page.wait_for_selector(sel, timeout=1500)
+                         if skip_btn:
+                             logger.info(f"⏩ Z.ai: Found Skip button ({sel})")
+                             break
+                     except:
+                         continue
+                
+                if skip_btn and await skip_btn.is_visible():
+                    logger.info("⏩ Z.ai: Clicking 'Skip' button...")
+                    await skip_btn.click()
+            except Exception:
+                # It's okay if we don't find it or too slow, just proceed
+                pass
 
             # Step 3: Wait for response
             response_text = await self._wait_for_response(page)
@@ -160,7 +195,6 @@ class ZaiProvider(BaseProvider):
         finally:
             # CRITICAL: Close the context to free memory and clear data
             await context.close()
-            # We rarely close the browser itself, it stays up for the next request.
 
     async def _wait_for_response(self, page) -> str:
         """
@@ -200,11 +234,8 @@ class ZaiProvider(BaseProvider):
             if not current_text:
                 continue
 
-            # Clean "Thinking..."
-            clean = current_text
-            for prefix in ["Thinking...\nSkip\n", "Thinking...\n"]:
-                if clean.startswith(prefix):
-                    clean = clean[len(prefix):]
+            # Clean "Thinking..." via shared method
+            clean = self._clean_thinking(current_text)
 
             if clean == last_text and len(clean) > 0:
                 stable_count += 1
@@ -223,19 +254,67 @@ class ZaiProvider(BaseProvider):
              
         raise TimeoutError("Z.ai no response")
 
-    def _extract_final_answer(self, text: str) -> str:
-        """Extract answer from thinking chain."""
+    def _clean_thinking(self, text: str) -> str:
+        """Basic cleanup of UI states."""
         clean = text.strip()
-        for prefix in ["Thinking...\nSkip\n", "Thinking...\n"]:
-            if clean.startswith(prefix):
-                clean = clean[len(prefix):]
-                
-        # Split by double newlines to find paragraphs
-        parts = clean.split("\\n\\n")
-        
-        # If it looks like thinking process, skip the first part
-        if "Thought Process" in clean[:50]:
-             pass
-             
-        # For now, return full clean text as Z.ai mostly outputs good markdown
+        # Remove "Thinking..." and "Skip" artifacts at start
+        clean = re.sub(r"^(Thinking\.\.\.|Skip|\s)+", "", clean, flags=re.MULTILINE).strip()
         return clean
+
+    def _extract_final_answer(self, text: str) -> str:
+        """
+        Extract just the final answer from Z.ai response.
+        Removes 'Thought Process' via aggressive block filtering.
+        """
+        clean = self._clean_thinking(text)
+        
+        # Split by double newlines to get paragraphs/blocks
+        blocks = re.split(r"\n{2,}", clean)
+        
+        if len(blocks) == 0:
+            return clean
+            
+        filtered_blocks = []
+        
+        # Markers of thought process (strong indicators)
+        thought_markers = [
+            "thought process",
+            "analysis:",
+            "user said",
+            "i should",
+            "i will",
+            "need to",
+            "common responses include",
+            "user asks for",
+        ]
+        
+        # Strategy: Iterate blocks. If block looks like thought, skip it.
+        # BUT: Ensure we keep at least the last block.
+        
+        first_block_consumed = False
+        
+        for i, block in enumerate(blocks):
+            is_thought = False
+            lower_block = block.lower().strip()
+            
+            # Header check
+            if lower_block == "thought process":
+                is_thought = True
+            
+            # Content check (Thought markers at START of block)
+            for m in thought_markers:
+                if lower_block.startswith(m):
+                    is_thought = True
+                    break
+            
+            if not is_thought:
+                filtered_blocks.append(block)
+            else:
+                logger.info(f"🗑️ Z.ai: Filtered thought block: {block[:30]}...")
+
+        if not filtered_blocks:
+            # Fallback: If everything looked like a thought, return the last block.
+            # Usually the answer is at the end.
+            return blocks[-1]
+            
+        return "\n\n".join(filtered_blocks)
