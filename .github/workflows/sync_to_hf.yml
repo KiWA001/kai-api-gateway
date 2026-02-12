@@ -1,0 +1,22 @@
+name: Sync to Hugging Face Spaces
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+      - name: Push to hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "bot@kai-api.com"
+          git config --global user.name "KAI Bot"
+          git remote add space https://KiWA001:$HF_TOKEN@huggingface.co/spaces/KiWA001/kai-api-gateway
+          git push -f space main
