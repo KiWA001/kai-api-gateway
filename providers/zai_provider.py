@@ -8,7 +8,7 @@ Strategy:
 - Uses EPHEMERAL contexts (Tabs) per request for robust data isolation.
 - Scrapes the AI response from the DOM.
 - Skips "Thinking..." animation to speed up response.
-- Aggressively cleans "Thought Process" artifacts.
+- Aggressively cleans "Thought Process" artifacts using Block Filtering.
 
 Implementation:
 - Async Playwright (Native integration with FastAPI)
@@ -149,10 +149,9 @@ class ZaiProvider(BaseProvider):
 
             # --- OPTIMIZATION: SKIP THINKING ---
             # Attempt to click "Skip" button to bypass animation
-            # Targeted Selector based on user screenshot: div[class*="thinking-chain-container"] button
             try:
                 # Wait briefly for "Thinking..." state
-                # We target distinct selectors that might appear
+                # We target distinct selectors
                 selectors = [
                     'button:has-text("Skip")', 
                     'div[class*="thinking-chain-container"] button',
@@ -175,7 +174,6 @@ class ZaiProvider(BaseProvider):
                     logger.info("⏩ Z.ai: Clicking 'Skip' button...")
                     await skip_btn.click()
             except Exception:
-                # It's okay if we don't find it or too slow, just proceed
                 pass
 
             # Step 3: Wait for response
@@ -268,53 +266,53 @@ class ZaiProvider(BaseProvider):
         """
         clean = self._clean_thinking(text)
         
-        # Split by double newlines to get paragraphs/blocks
-        blocks = re.split(r"\n{2,}", clean)
+        # Split by double newlines or single newlines if they delineate distinct blocks.
+        # Z.ai sometimes uses \n for blocks.
+        # Let's try splitting by \n first, then grouping?
+        # No, \n might be inside a paragraph. 
+        # But for 'Thought Process', it usually is followed by a newline.
         
-        if len(blocks) == 0:
-            return clean
-            
-        filtered_blocks = []
-        
-        # Markers of thought process (strong indicators)
-        thought_markers = [
-            "thought process",
-            "analysis:",
-            "user said",
-            "i should",
-            "i will",
-            "need to",
-            "common responses include",
-            "user asks for",
-        ]
-        
-        # Strategy: Iterate blocks. If block looks like thought, skip it.
-        # BUT: Ensure we keep at least the last block.
-        
-        first_block_consumed = False
-        
-        for i, block in enumerate(blocks):
-            is_thought = False
-            lower_block = block.lower().strip()
-            
-            # Header check
-            if lower_block == "thought process":
-                is_thought = True
-            
-            # Content check (Thought markers at START of block)
-            for m in thought_markers:
-                if lower_block.startswith(m):
-                    is_thought = True
-                    break
-            
-            if not is_thought:
-                filtered_blocks.append(block)
-            else:
-                logger.info(f"🗑️ Z.ai: Filtered thought block: {block[:30]}...")
+        # If we detect "Thought Process" at start, we go into aggressive filtering mode.
+        if clean.startswith("Thought Process"):
+             # Regex: Remove everything from start until the matching newline that is followed by Answer.
+             # Heuristic: The Answer block usually starts after the content associated with 'Thought Process'.
+             
+             # If double newlines exist, use them as block separators.
+             if "\n\n" in clean:
+                 blocks = clean.split("\n\n")
+             else:
+                 # Fallback: Split by single newline if no double newlines found.
+                 # This handles the user's specific example.
+                 blocks = clean.split("\n")
 
-        if not filtered_blocks:
-            # Fallback: If everything looked like a thought, return the last block.
-            # Usually the answer is at the end.
-            return blocks[-1]
-            
-        return "\n\n".join(filtered_blocks)
+             # Filter blocks that look like thoughts
+             filtered = []
+             thought_markers = ["thought process", "analysis:", "user said", "i should", "i will", "considering"]
+             
+             # Always drop the first one if it includes "Thought Process"
+             if blocks and "thought process" in blocks[0].lower():
+                 pass # Drop
+             else:
+                 filtered.append(blocks[0])
+                 
+             for block in blocks[1:]:
+                 is_thought = False
+                 lb = block.lower().strip()
+                 # If block is empty, skip? No, keep structure.
+                 if not lb: continue
+                 
+                 for m in thought_markers:
+                     if lb.startswith(m):
+                         is_thought = True
+                         break
+                 
+                 if not is_thought:
+                     filtered.append(block)
+             
+             if not filtered:
+                 return blocks[-1]
+                 
+             joiner = "\n\n" if "\n\n" in clean else "\n"
+             return joiner.join(filtered)
+
+        return clean
