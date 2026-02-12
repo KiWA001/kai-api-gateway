@@ -669,7 +669,9 @@
                     fetch('/models')
                 ]);
 
-                if (!statsRes.ok) return;
+                if (!statsRes.ok) {
+                    throw new Error(`Stats HTTP ${statsRes.status}`);
+                }
                 const stats = await statsRes.json();
 
                 availableModelsSet.clear();
@@ -681,6 +683,14 @@
                 renderDashboard(stats);
             } catch (e) {
                 console.error("Failed to fetch ranking", e);
+                const tbody = document.querySelector('#rankings-table tbody');
+                // Only replace if we haven't rendered data yet (or if it's the loading state)
+                if (tbody.innerHTML.includes('Loading')) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444; text-align:center; padding: 20px;">
+                        Failed to load stats: ${e.message}<br>
+                        <small style="opacity:0.7">If on Hugging Face, check "Logs" tab for backend errors.</small>
+                    </td></tr>`;
+                }
             }
         }
 
