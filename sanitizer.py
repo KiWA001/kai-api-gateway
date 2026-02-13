@@ -109,6 +109,16 @@ def sanitize_response(text: str) -> str:
     # Fix user-reported "/N" artifact (treat as newline if standalone)
     cleaned = ARTIFACT_N_PATTERN.sub("\n", cleaned)
 
+    # === Unescape JSON/Raw Literals ===
+    # User wants "\n" to be actual newline and "\"" to be actual quote.
+    # We try to unescape, but carefully.
+    if "\\n" in cleaned or '\\"' in cleaned:
+        try:
+            # First try standard replace for safety and speed
+            cleaned = cleaned.replace("\\n", "\n").replace('\\"', '"')
+        except Exception:
+             pass
+
     # === Spam Removal ===
     for pattern in COMPILED_SPAM:
         cleaned = pattern.sub("", cleaned)
