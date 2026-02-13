@@ -517,7 +517,7 @@
                     <h3>List Models</h3>
                     <p>Get all currently available AI models.</p>
                 </div>
-                <span class="method-badge GET">GET /models</span>
+                <span class="method-badge GET">POST /v1/chat/completions</span>
             </div>
             <div class="endpoint-body">
                 <div class="endpoint-docs">
@@ -598,165 +598,197 @@
         async function runDemo(type) {
             const resBox = document.getElementById(type + '-res');
             resBox.className = 'demo-response visible';
-            resBox.textContent = '⏳ Sending request...';
+            resBox.style.display = 'block';
+            resBox.innerHTML = 'Sending Request... <span class="loading-spin"></span>';
+
+            const startTime = Date.now();
 
             try {
-                let url = '/chat';
-                let method = 'POST';
-                let body = {};
+                let url, body, method = 'POST';
+                let headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
+                };
 
-                if (type === 'chat-basic') {
-                    body = { message: document.getElementById('chat-basic-input').value };
-                } else if (type === 'chat-adv') {
+                if (type === 'chat') {
+                    // Simple Chat
+                    url = '/v1/chat/completions';
                     body = {
-                        message: document.getElementById('chat-adv-msg').value,
-                        system_prompt: document.getElementById('chat-adv-sys').value,
-                        model: document.getElementById('chat-adv-model').value
+                        model: "gemini-3-flash",
+                        messages: [{ role: "user", content: "Hello! Who are you?" }]
                     };
-                } else if (type === 'models') {
-                    url = '/models';
+                }
+                else if (type === 'chat-adv') {
+                    // Advanced Chat
+                    const model = document.getElementById('chat-adv-model').value || "gemini-3-flash";
+                    url = '/v1/chat/completions';
+                    body = {
+                        model: model,
+                        messages: [
+                            { role: "system", content: "You are a helpful assistant." },
+                            { role: "user", content: "Tell me a fun fact." }
+                        ]
+                    };
+                }
+                else if (type === 'models') {
+                    // List Models
+                    url = '/models'; // This is GET, no body
                     method = 'GET';
-                    body = null;
+                    body = undefined;
+                    // Keep models as public? Or require auth? 
+                    // Usually /models is authenticated in OpenAI but let's keep it open for now or add auth.
                 }
 
-                const res = await fetch(url, {
+                const response = await fetch(url, {
                     method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: body ? JSON.stringify(body) : null
+                    headers: headers,
+                    body: body ? JSON.stringify(body) : undefined
                 });
 
-                const data = await res.json();
-                resBox.className = 'demo-response visible ' + (res.ok ? 'success' : 'error');
-                resBox.textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-                resBox.textContent = 'Error: ' + e.message;
+                const data = await response.json();
+                const duration = Date.now() - startTime;
+
+                if (!response.ok) throw new Error(data.detail || 'Request failed');
+
+                resBox.innerHTML = `
+                    <div style="margin-bottom:5px; font-weight:bold; color:var(--success);">
+                        Success (${duration}ms)
+                    </div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+
+            } catch (err) {
+                resBox.innerHTML = `
+                    <div style="margin-bottom:5px; font-weight:bold; color:var(--error);">
+                        Error
+                    </div>
+                    <pre>${err.message}</pre>
+                `;
             }
-        }
+            async function runSearch() {
+                const query = document.getElementById('search-query').value;
+                const mode = document.getElementById('search-mode').value;
+                const resBox = document.getElementById('search-res');
 
-        async function runSearch() {
-            const query = document.getElementById('search-query').value;
-            const mode = document.getElementById('search-mode').value;
-            const resBox = document.getElementById('search-res');
+                if (!query) { alert("Please enter a query"); return; }
 
-            if (!query) { alert("Please enter a query"); return; }
+                resBox.className = 'demo-response visible';
+                resBox.textContent = '⏳ Searching... (Deep Research may take 10s+)';
 
-            resBox.className = 'demo-response visible';
-            resBox.textContent = '⏳ Searching... (Deep Research may take 10s+)';
+                const endpoint = mode === 'deep' ? '/deep_research' : '/search';
 
-            const endpoint = mode === 'deep' ? '/deep_research' : '/search';
-
-            try {
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query })
-                });
-                const data = await res.json();
-                resBox.className = 'demo-response visible ' + (res.ok ? 'success' : 'error');
-                resBox.innerText = JSON.stringify(data, null, 2);
-            } catch (e) {
-                resBox.innerText = 'Error: ' + e.message;
-            }
-        }
-
-        // --- Live Ranking Logic ---
-
-        let availableModelsSet = new Set();
-        let scatterChart, pieChart;
-
-        async function fetchRankingStats() {
-            try {
-                const t = new Date().getTime();
-                const [statsRes, modelsRes] = await Promise.all([
-                    fetch(`/admin/stats?t=${t}`),
-                    fetch(`/models?t=${t}`)
-                ]);
-
-                if (!statsRes.ok) {
-                    throw new Error(`Stats HTTP ${statsRes.status}`);
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: query })
+                    });
+                    const data = await res.json();
+                    resBox.className = 'demo-response visible ' + (res.ok ? 'success' : 'error');
+                    resBox.innerText = JSON.stringify(data, null, 2);
+                } catch (e) {
+                    resBox.innerText = 'Error: ' + e.message;
                 }
-                const stats = await statsRes.json();
+            }
 
-                availableModelsSet.clear();
-                if (modelsRes.ok) {
-                    const data = await modelsRes.json();
-                    // Robust handling: Support both array and object wrapper
-                    const modelsList = Array.isArray(data) ? data : (data.models || []);
+            // --- Live Ranking Logic ---
 
-                    if (Array.isArray(modelsList)) {
-                        modelsList.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
-                    } else {
-                        console.error("Expected array but got:", data);
+            let availableModelsSet = new Set();
+            let scatterChart, pieChart;
+
+            async function fetchRankingStats() {
+                try {
+                    const t = new Date().getTime();
+                    const [statsRes, modelsRes] = await Promise.all([
+                        fetch(`/admin/stats?t=${t}`),
+                        fetch(`/models?t=${t}`)
+                    ]);
+
+                    if (!statsRes.ok) {
+                        throw new Error(`Stats HTTP ${statsRes.status}`);
                     }
-                }
+                    const stats = await statsRes.json();
 
-                renderDashboard(stats);
-            } catch (e) {
-                console.error("Failed to fetch ranking", e);
-                const tbody = document.querySelector('#rankings-table tbody');
-                // Only replace if we haven't rendered data yet (or if it's the loading state)
-                if (tbody.innerHTML.includes('Loading')) {
-                    tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444; text-align:center; padding: 20px;">
+                    availableModelsSet.clear();
+                    if (modelsRes.ok) {
+                        const data = await modelsRes.json();
+                        // Robust handling: Support both array and object wrapper
+                        const modelsList = Array.isArray(data) ? data : (data.models || []);
+
+                        if (Array.isArray(modelsList)) {
+                            modelsList.forEach(m => availableModelsSet.add(`${m.provider}/${m.model}`));
+                        } else {
+                            console.error("Expected array but got:", data);
+                        }
+                    }
+
+                    renderDashboard(stats);
+                } catch (e) {
+                    console.error("Failed to fetch ranking", e);
+                    const tbody = document.querySelector('#rankings-table tbody');
+                    // Only replace if we haven't rendered data yet (or if it's the loading state)
+                    if (tbody.innerHTML.includes('Loading')) {
+                        tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444; text-align:center; padding: 20px;">
                         Failed to load stats: ${e.message}<br>
                         <small style="opacity:0.7">If on Hugging Face, check "Logs" tab for backend errors.</small>
                     </td></tr>`;
+                    }
                 }
             }
-        }
 
-        function calculateScore(s, f, timeMs, cf) {
-            let base = s - (f * 2);
-            let penalty = (timeMs || 0) / 1000.0;
-            let score = base - penalty;
-            if (cf >= 3) return score - 100000;
-            return score;
-        }
-
-        function renderDashboard(data) {
-            let rows = [];
-            let providerCounts = {};
-            let scatterData = [];
-
-            for (let [key, val] of Object.entries(data)) {
-                let score = calculateScore(val.success, val.failure, val.avg_time_ms, val.consecutive_failures);
-                rows.push({ id: key, ...val, score: score });
-
-                // Provider stats for Pie
-                let prov = key.split('/')[0];
-                providerCounts[prov] = (providerCounts[prov] || 0) + val.success;
-
-                // Scatter Data
-                scatterData.push({
-                    x: val.avg_time_ms || 0,
-                    y: score,
-                    id: key
-                });
+            function calculateScore(s, f, timeMs, cf) {
+                let base = s - (f * 2);
+                let penalty = (timeMs || 0) / 1000.0;
+                let score = base - penalty;
+                if (cf >= 3) return score - 100000;
+                return score;
             }
-            rows.sort((a, b) => b.score - a.score);
 
-            // Render Table
-            const tbody = document.querySelector('#rankings-table tbody');
-            tbody.innerHTML = '';
+            function renderDashboard(data) {
+                let rows = [];
+                let providerCounts = {};
+                let scatterData = [];
 
-            if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px;">No stats available yet. Make a request!</td></tr>';
-            } else {
-                rows.forEach((row, index) => {
-                    const tr = document.createElement('tr');
-                    let scoreClass = row.score > 0 ? 'score-good' : 'score-bad';
-                    let timeStr = row.avg_time_ms ? Math.round(row.avg_time_ms) + 'ms' : '-';
+                for (let [key, val] of Object.entries(data)) {
+                    let score = calculateScore(val.success, val.failure, val.avg_time_ms, val.consecutive_failures);
+                    rows.push({ id: key, ...val, score: score });
 
-                    let status = '';
-                    if (!availableModelsSet.has(row.id)) {
-                        status = '<span style="color:#9ca3af; font-size:11px; border:1px solid #374151; padding:2px 6px; border-radius:4px;">OFFLINE (Local Only)</span>';
-                        tr.style.opacity = '0.6';
-                    } else if (row.consecutive_failures >= 3) {
-                        status = '<span style="color:#ef4444">⚠️ CRITICAL</span>';
-                    } else {
-                        status = '<span style="color:#22c55e">● Active</span>';
-                    }
+                    // Provider stats for Pie
+                    let prov = key.split('/')[0];
+                    providerCounts[prov] = (providerCounts[prov] || 0) + val.success;
 
-                    tr.innerHTML = `
+                    // Scatter Data
+                    scatterData.push({
+                        x: val.avg_time_ms || 0,
+                        y: score,
+                        id: key
+                    });
+                }
+                rows.sort((a, b) => b.score - a.score);
+
+                // Render Table
+                const tbody = document.querySelector('#rankings-table tbody');
+                tbody.innerHTML = '';
+
+                if (rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px;">No stats available yet. Make a request!</td></tr>';
+                } else {
+                    rows.forEach((row, index) => {
+                        const tr = document.createElement('tr');
+                        let scoreClass = row.score > 0 ? 'score-good' : 'score-bad';
+                        let timeStr = row.avg_time_ms ? Math.round(row.avg_time_ms) + 'ms' : '-';
+
+                        let status = '';
+                        if (!availableModelsSet.has(row.id)) {
+                            status = '<span style="color:#9ca3af; font-size:11px; border:1px solid #374151; padding:2px 6px; border-radius:4px;">OFFLINE (Local Only)</span>';
+                            tr.style.opacity = '0.6';
+                        } else if (row.consecutive_failures >= 3) {
+                            status = '<span style="color:#ef4444">⚠️ CRITICAL</span>';
+                        } else {
+                            status = '<span style="color:#22c55e">● Active</span>';
+                        }
+
+                        tr.innerHTML = `
                          <td><span class="rank-badge">${index + 1}</span></td>
                          <td><b>${row.id}</b></td>
                          <td class="${scoreClass}">${row.score.toFixed(2)}</td>
@@ -765,77 +797,77 @@
                          <td>${row.failure}</td>
                          <td>${status}</td>
                      `;
-                    tbody.appendChild(tr);
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                // Render Charts
+                updateScatterChart(scatterData);
+                updatePieChart(providerCounts);
+            }
+
+            function updateScatterChart(data) {
+                const ctx = document.getElementById('scatterChart').getContext('2d');
+                if (scatterChart) {
+                    scatterChart.data.datasets[0].data = data;
+                    scatterChart.update('none');
+                    return;
+                }
+                const validData = data.filter(d => d.x > 0);
+                scatterChart = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Models',
+                            data: validData,
+                            backgroundColor: '#8b5cf6',
+                            borderColor: '#8b5cf6',
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 1000 },
+                        scales: {
+                            x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Time (ms)', color: '#6b6b80' }, grid: { color: '#2a2a3a' } },
+                            y: { title: { display: true, text: 'Score', color: '#6b6b80' }, grid: { color: '#2a2a3a' } }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: (ctx) => ctx.raw.id + ': ' + ctx.raw.y.toFixed(2) } }
+                        }
+                    }
                 });
             }
 
-            // Render Charts
-            updateScatterChart(scatterData);
-            updatePieChart(providerCounts);
-        }
-
-        function updateScatterChart(data) {
-            const ctx = document.getElementById('scatterChart').getContext('2d');
-            if (scatterChart) {
-                scatterChart.data.datasets[0].data = data;
-                scatterChart.update('none');
-                return;
-            }
-            const validData = data.filter(d => d.x > 0);
-            scatterChart = new Chart(ctx, {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        label: 'Models',
-                        data: validData,
-                        backgroundColor: '#8b5cf6',
-                        borderColor: '#8b5cf6',
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: { duration: 1000 },
-                    scales: {
-                        x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Time (ms)', color: '#6b6b80' }, grid: { color: '#2a2a3a' } },
-                        y: { title: { display: true, text: 'Score', color: '#6b6b80' }, grid: { color: '#2a2a3a' } }
+            function updatePieChart(counts) {
+                if (window.pieChartRendered) return;
+                const ctx = document.getElementById('pieChart').getContext('2d');
+                window.pieChartRendered = true;
+                pieChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(counts),
+                        datasets: [{
+                            data: Object.values(counts),
+                            backgroundColor: ['#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6'],
+                            borderWidth: 0
+                        }]
                     },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => ctx.raw.id + ': ' + ctx.raw.y.toFixed(2) } }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 1000 },
+                        plugins: {
+                            legend: { position: 'right', labels: { color: '#9898aa', font: { size: 10 } } }
+                        }
                     }
-                }
-            });
-        }
+                });
+            }
 
-        function updatePieChart(counts) {
-            if (window.pieChartRendered) return;
-            const ctx = document.getElementById('pieChart').getContext('2d');
-            window.pieChartRendered = true;
-            pieChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(counts),
-                    datasets: [{
-                        data: Object.values(counts),
-                        backgroundColor: ['#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: { duration: 1000 },
-                    plugins: {
-                        legend: { position: 'right', labels: { color: '#9898aa', font: { size: 10 } } }
-                    }
-                }
-            });
-        }
-
-        // Init Live Ranking
-        fetchRankingStats();
-        setInterval(fetchRankingStats, 5000);
+            // Init Live Ranking
+            fetchRankingStats();
+            setInterval(fetchRankingStats, 5000);
 
     </script>
 

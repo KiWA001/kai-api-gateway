@@ -255,68 +255,6 @@ async def root():
     return FileResponse("static/docs.html")
 
 
-@app.post(
-    "/chat",
-    response_model=ChatResponse,
-    responses={500: {"model": ErrorResponse}},
-    tags=["Chat"],
-)
-async def chat(request: ChatRequest):
-    """
-    Send a message and get an AI response.
-
-    - **message**: Your prompt/question (required)
-    - **model**: Optional model name (defaults to best available)
-    - **provider**: "auto" (tries all), "g4f", or "pollinations"
-    - **system_prompt**: Optional system instructions for the AI
-
-    Each request is fully stateless — no conversation history has to be retained.
-    If a specific provider is chosen, tries all models on that provider
-    ranked by quality before falling back to other providers.
-    All users have unlimited access — no rate limiting.
-    """
-    logger.info(
-        f"Chat request: model={request.model}, provider={request.provider}, "
-        f"message_length={len(request.message)}"
-    )
-
-    try:
-        result = await engine.chat(
-            prompt=request.message,
-            model=request.model,
-            provider=request.provider or "auto",
-            system_prompt=request.system_prompt,
-        )
-
-        return ChatResponse(
-            response=result["response"],
-            model=result["model"],
-            provider=result["provider"],
-            attempts=result.get("attempts", 1),
-            response_time_ms=result.get("response_time_ms"),
-            timestamp=datetime.utcnow().isoformat() + "Z",
-        )
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        logger.error(f"All models exhausted: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "All AI models are currently unavailable. "
-                "Please contact the developer to fix this issue. "
-                f"Details: {str(e)}"
-            ),
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}",
-        )
-
-
 @app.get(
     "/models",
     response_model=ModelsResponse,
