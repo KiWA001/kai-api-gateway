@@ -451,6 +451,15 @@
 
                     <button class="demo-btn" onclick="runDemo('chat-basic')">Run Request ▶</button>
                     <div id="chat-basic-status" class="demo-status"></div>
+
+                    <select id="chat-basic-model" class="demo-select" style="margin-top:10px;">
+                        <option value="gemini-3-flash">gemini-3-flash (Default)</option>
+                        <option value="gpt-4o">gpt-4o</option>
+                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="glm-4">glm-4</option>
+                        <option value="mistral-large">mistral-large</option>
+                    </select>
+
                     <div id="chat-basic-res" class="demo-response"></div>
                 </div>
             </div>
@@ -611,11 +620,13 @@
                 if (type === 'chat-basic') {
                     // Simple Chat
                     const inputVal = document.getElementById('chat-basic-input').value;
+                    const modelVal = document.getElementById('chat-basic-model').value || "gemini-3-flash";
+
                     if (!inputVal) { alert("Please enter a message"); return; }
 
                     url = '/v1/chat/completions';
                     body = {
-                        model: "gemini-3-flash",
+                        model: modelVal,
                         messages: [{ role: "user", content: inputVal }]
                     };
                 }
@@ -787,16 +798,6 @@
                     let scoreClass = row.score > 0 ? 'score-good' : 'score-bad';
                     let timeStr = row.avg_time_ms ? Math.round(row.avg_time_ms) + 'ms' : '-';
 
-                    let status = '';
-                    if (!availableModelsSet.has(row.id)) {
-                        status = '<span style="color:#9ca3af; font-size:11px; border:1px solid #374151; padding:2px 6px; border-radius:4px;">OFFLINE (Local Only)</span>';
-                        tr.style.opacity = '0.6';
-                    } else if (row.consecutive_failures >= 3) {
-                        status = '<span style="color:#ef4444">⚠️ CRITICAL</span>';
-                    } else {
-                        status = '<span style="color:#22c55e">● Active</span>';
-                    }
-
                     tr.innerHTML = `
                          <td><span class="rank-badge">${index + 1}</span></td>
                          <td><b>${row.id}</b></td>
@@ -804,7 +805,6 @@
                          <td>${timeStr}</td>
                          <td>${row.success}</td>
                          <td>${row.failure}</td>
-                         <td>${status}</td>
                      `;
                     tbody.appendChild(tr);
                 });
