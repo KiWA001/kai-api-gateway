@@ -153,6 +153,11 @@ def update_usage_stats(key_id: str, tokens: int):
 
 # --- Endpoint ---
 
+@router.get("/v1/debug")
+async def v1_debug():
+    """Debug endpoint to verify router is mounted."""
+    return {"status": "ok", "message": "v1 router is matching"}
+
 @router.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completions(
     request: ChatCompletionRequest, 
