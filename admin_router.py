@@ -6,7 +6,7 @@ import uuid
 
 from db import get_supabase
 
-router = APIRouter(prefix="/admin", tags=["Admin"])
+router = APIRouter(prefix="/qaz", tags=["Admin"])
 
 # --- Models ---
 

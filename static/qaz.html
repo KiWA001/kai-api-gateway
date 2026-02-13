@@ -268,7 +268,7 @@
 
             try {
                 // Call backend
-                const res = await fetch('/admin/test_all', { method: 'POST' });
+                const res = await fetch('/qaz/test_all', { method: 'POST' });
                 const results = await res.json();
 
                 console.log("Test Results:", results);
@@ -297,7 +297,7 @@
             btn.disabled = true;
 
             try {
-                await fetch('/admin/clear_stats', { method: 'POST' });
+                await fetch('/qaz/clear_stats', { method: 'POST' });
                 alert("Stats cleared successfully.");
             } catch (e) {
                 alert("Clear failed: " + e.message);
@@ -308,7 +308,7 @@
         }
         async function loadKeys() {
             try {
-                const res = await fetch('/admin/keys');
+                const res = await fetch('/qaz/keys');
                 const keys = await res.json();
 
                 const tbody = document.getElementById('keys-list');
@@ -348,7 +348,7 @@
             if (!name) return;
 
             try {
-                const res = await fetch('/admin/keys', {
+                const res = await fetch('/qaz/keys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: name, limit_tokens: 1000000 })
@@ -369,7 +369,7 @@
         async function revokeKey(id) {
             if (!confirm("Are you sure you want to delete this key? Access will be immediately revoked.")) return;
             try {
-                await fetch(`/admin/keys/${id}`, { method: 'DELETE' });
+                await fetch(`/qaz/keys/${id}`, { method: 'DELETE' });
                 loadKeys();
             } catch (e) {
                 alert("Error: " + e.message);

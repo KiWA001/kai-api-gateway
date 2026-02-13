@@ -269,6 +269,19 @@
             margin-bottom: 12px;
             border-radius: var(--radius-sm);
             border: 1px solid var(--border);
+            appearance: none;
+            /* Remove default arrow to ensure styling applies */
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%239898aa%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px top 50%;
+            background-size: 12px auto;
+        }
+
+        .demo-select option {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 10px;
         }
 
         .demo-btn {
@@ -432,7 +445,6 @@
                     <div class="demo-response visible" style="color: #a78bfa;">
                         curl https://kiwa001-kai-api-gateway.hf.space/v1/chat/completions \
                         -H "Content-Type: application/json" \
-                        -H "Authorization: Bearer sk-kai-demo-public" \
                         -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
                     </div>
                 </div>
@@ -442,23 +454,13 @@
                         placeholder='{"message": "What is AI?"}'>What is the capital of France?</textarea>
 
                     <select id="chat-basic-model" class="demo-select" style="margin-top:10px;">
-                        <option value="gemini-3-flash">gemini-3-flash (Default)</option>
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                        <option value="glm-4">glm-4</option>
-                        <option value="mistral-large">mistral-large</option>
+                        <option value="gemini-3-flash" selected>Loading models...</option>
                     </select>
 
                     <button class="demo-btn" onclick="runDemo('chat-basic')">Run Request ▶</button>
                     <div id="chat-basic-status" class="demo-status"></div>
 
-                    <select id="chat-basic-model" class="demo-select" style="margin-top:10px;">
-                        <option value="gemini-3-flash">gemini-3-flash (Default)</option>
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                        <option value="glm-4">glm-4</option>
-                        <option value="mistral-large">mistral-large</option>
-                    </select>
+
 
                     <div id="chat-basic-res" class="demo-response"></div>
                 </div>
@@ -483,6 +485,11 @@
                 <div class="endpoint-docs">
                     <p style="color:var(--text-secondary); font-size:14px;">Returns a JSON list of all models supported
                         by the API, ranked by quality.</p>
+                    <br>
+                    <span class="demo-label">Example Request</span>
+                    <div class="demo-response visible" style="color: #a78bfa;">
+                        curl https://kiwa001-kai-api-gateway.hf.space/models
+                    </div>
                 </div>
                 <div class="endpoint-demo">
                     <span class="demo-label">Try It Live</span>
@@ -517,6 +524,29 @@
                             </td>
                         </tr>
                     </table>
+                    <br>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                        <span class="demo-label" style="margin-bottom:0;">Example Request</span>
+                        <div style="display:flex; gap:8px;">
+                            <button onclick="toggleSearchEx('simple')" id="btn-ex-simple"
+                                style="padding:4px 8px; border-radius:4px; border:1px solid var(--accent); background:var(--accent); color:white; font-size:11px; cursor:pointer;">Simple</button>
+                            <button onclick="toggleSearchEx('deep')" id="btn-ex-deep"
+                                style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-muted); font-size:11px; cursor:pointer;">Deep
+                                Research</button>
+                        </div>
+                    </div>
+
+                    <div id="ex-code-simple" class="demo-response visible" style="color: #a78bfa;">
+                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/search \
+                        -H "Content-Type: application/json" \
+                        -d '{"query": "Machine Learning", "limit": 5}'
+                    </div>
+
+                    <div id="ex-code-deep" class="demo-response" style="color: #a78bfa; display:none;">
+                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
+                        -H "Content-Type: application/json" \
+                        -d '{"query": "Future of AI", "limit": 2}'
+                    </div>
                 </div>
                 <div class="endpoint-demo">
                     <span class="demo-label">Try It Live</span>
@@ -594,6 +624,75 @@
         // Global flag for Pie Chart
         window.pieChartRendered = false;
 
+        // Auto-load models for dropdown
+        async function loadModelsDropdown() {
+            const select = document.getElementById('chat-basic-model');
+            if (!select) return;
+
+            try {
+                const res = await fetch('/models');
+                if (!res.ok) throw new Error("Failed to fetch models");
+
+                const data = await res.json();
+                const models = Array.isArray(data) ? data : (data.models || []);
+
+                if (models.length === 0) throw new Error("No models returned");
+
+                select.innerHTML = '';
+                models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.id;
+                    if (m.id === 'gemini-3-flash') opt.selected = true;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error("Model load error", e);
+                // Fallback if empty or error
+                if (select.options.length <= 1) {
+                    select.innerHTML = `
+                        <option value="gemini-3-flash" selected>gemini-3-flash (Default)</option>
+                        <option value="gpt-4o">gpt-4o</option>
+                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="glm-4">glm-4</option>
+                        <option value="mistral-large">mistral-large</option>
+                    `;
+                }
+            }
+        }
+        document.addEventListener('DOMContentLoaded', loadModelsDropdown);
+
+        function toggleSearchEx(mode) {
+            const simpleBtn = document.getElementById('btn-ex-simple');
+            const deepBtn = document.getElementById('btn-ex-deep');
+            const simpleCode = document.getElementById('ex-code-simple');
+            const deepCode = document.getElementById('ex-code-deep');
+
+            if (mode === 'simple') {
+                simpleCode.style.display = 'block';
+                deepCode.style.display = 'none';
+                
+                simpleBtn.style.background = 'var(--accent)';
+                simpleBtn.style.borderColor = 'var(--accent)';
+                simpleBtn.style.color = 'white';
+                
+                deepBtn.style.background = 'transparent';
+                deepBtn.style.borderColor = 'var(--border)';
+                deepBtn.style.color = 'var(--text-muted)';
+            } else {
+                simpleCode.style.display = 'none';
+                deepCode.style.display = 'block';
+                
+                deepBtn.style.background = 'var(--accent)';
+                deepBtn.style.borderColor = 'var(--accent)';
+                deepBtn.style.color = 'white';
+                
+                simpleBtn.style.background = 'transparent';
+                simpleBtn.style.borderColor = 'var(--border)';
+                simpleBtn.style.color = 'var(--text-muted)';
+            }
+        }
+
         async function runDemo(type) {
             const resBox = document.getElementById(type + '-res');
             const statusBox = document.getElementById(type + '-status');
@@ -613,8 +712,7 @@
             try {
                 let url, body, method = 'POST';
                 let headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
+                    'Content-Type': 'application/json'
                 };
 
                 if (type === 'chat-basic') {
@@ -720,7 +818,7 @@
             try {
                 const t = new Date().getTime();
                 const [statsRes, modelsRes] = await Promise.all([
-                    fetch(`/admin/stats?t=${t}`),
+                    fetch(`/qaz/stats?t=${t}`),
                     fetch(`/models?t=${t}`)
                 ]);
 

@@ -116,30 +116,30 @@ app.include_router(admin_router)
 @app.get("/qazmlp", include_in_schema=False)
 async def admin_page():
     """Serve the Secret Admin Dashboard."""
-    return FileResponse("static/admin.html")
+    return FileResponse("static/qaz.html")
 
 
-@app.get("/admin/stats", include_in_schema=False)
+@app.get("/qaz/stats", include_in_schema=False)
 async def admin_stats():
     """Return raw model stats for dashboard."""
     return JSONResponse(engine.get_stats())
 
 
-@app.post("/admin/test_all", include_in_schema=False)
+@app.post("/qaz/test_all", include_in_schema=False)
 async def admin_test_all():
     """Trigger parallel testing of all models."""
     results = await engine.test_all_models()
     return JSONResponse(results)
 
 
-@app.post("/admin/clear_stats", include_in_schema=False)
+@app.post("/qaz/clear_stats", include_in_schema=False)
 async def admin_clear_stats():
     """Clear all stats."""
     engine.clear_stats()
     return JSONResponse({"status": "cleared"})
 
 
-@app.get("/admin/debug_g4f", include_in_schema=False)
+@app.get("/qaz/debug_g4f", include_in_schema=False)
 async def admin_debug_g4f():
     """
     Verbose Debug for G4F Provider on Server.
@@ -204,16 +204,58 @@ async def admin_debug_g4f():
 
 
 # ---------- Custom Swagger UI ----------
+# ---------- Custom Swagger UI ----------
 @app.get("/docs", include_in_schema=False)
-async def custom_swagger_ui_html():
-    """Serve custom dark-themed Swagger UI."""
+async def public_swagger_ui():
+    """Serve Public Swagger UI (No Admin)."""
     return get_swagger_ui_html(
-        openapi_url=app.openapi_url,
-        title=f"{API_TITLE} - Swagger UI",
+        openapi_url="/openapi_public.json",
+        title=f"{API_TITLE} - Public Docs",
         swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
         swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
         swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png",
     )
+
+@app.get("/qazmlpdocs", include_in_schema=False)
+async def admin_swagger_ui():
+    """Serve Admin Swagger UI (Full)."""
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url, # Default includes Admin
+        title=f"{API_TITLE} - Admin Docs",
+        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png",
+    )
+
+@app.get("/openapi_public.json", include_in_schema=False)
+async def get_public_openapi():
+    """Generate OpenAPI schema without Admin routes."""
+    if app.openapi_schema:
+        schema = app.openapi_schema.copy()
+    else:
+        schema = app.openapi()
+        
+    # Deep copy to avoid modifying the cached schema
+    import copy
+    public_schema = copy.deepcopy(schema)
+    
+    # Filter paths
+    paths_to_remove = []
+    for path, methods in public_schema.get("paths", {}).items():
+        # Check if any Method in this path has "Admin" tag
+        is_admin = False
+        for method, details in methods.items():
+            if "tags" in details and "Admin" in details["tags"]:
+                is_admin = True
+                break
+        
+        if is_admin or path.startswith("/qaz") or path.startswith("/admin"):
+            paths_to_remove.append(path)
+            
+    for p in paths_to_remove:
+        del public_schema["paths"][p]
+        
+    return JSONResponse(public_schema)
 
 
 # ---------- Search Routes ----------
@@ -274,10 +316,7 @@ async def deep_research_endpoint(request: Request):
 # ---------- Routes ----------
 
 
-@app.get("/qazmlpdocs", include_in_schema=False)
-async def qazmlp_docs():
-    """Serve the Secured Dashboard."""
-    return FileResponse("static/qazmlpdocs.html")
+
 
 @app.get("/docs/public", include_in_schema=False)
 async def public_docs_page():
