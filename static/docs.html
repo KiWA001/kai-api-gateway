@@ -522,60 +522,7 @@
             </div>
         </div>
 
-        <!-- Live Ranking Container -->
-        <div class="endpoint-block">
-            <div class="endpoint-header">
-                <div class="endpoint-title">
-                    <h3>🏆 Live Model Ranking (Time-Weighted)</h3>
-                    <p>Real-time performance tracked by the engine (Speed & Reliability).</p>
-                </div>
-                <span class="method-badge LIVE">LIVE UPDATES</span>
-            </div>
-            <div class="endpoint-body full-width">
-                <div style="padding: 24px; width: 100%; overflow-x: auto;">
-                    <table class="param-table" id="rankings-table">
-                        <thead>
-                            <tr>
-                                <th width="50">#</th>
-                                <th>Model ID</th>
-                                <th>Score</th>
-                                <th>Avg Time</th>
-                                <th>Success</th>
-                                <th>Fail</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="7" style="text-align:center; padding: 20px;">Loading live stats...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
 
-        <!-- Network Analytics (Graphs) -->
-        <div class="endpoint-block">
-            <div class="endpoint-header">
-                <div class="endpoint-title">
-                    <h3>Network Analytics</h3>
-                    <p>Live Latency vs. Reliability & Provider Distribution.</p>
-                </div>
-            </div>
-            <div class="endpoint-body" id="analytics-body"
-                style="display: flex; flex-direction: column; gap: 20px; padding: 20px;">
-                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; flex: 1;">
-                    <h4 style="margin-bottom:10px; color:var(--text-secondary); font-size:12px; font-weight:700;">SPEED
-                        vs RELIABILITY</h4>
-                    <canvas id="scatterChart"></canvas>
-                </div>
-                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; flex: 1;">
-                    <h4 style="margin-bottom:10px; color:var(--text-secondary); font-size:12px; font-weight:700;">
-                        PROVIDER DISTRIBUTION</h4>
-                    <canvas id="pieChart"></canvas>
-                </div>
-            </div>
-        </div>
 
     </div>
 

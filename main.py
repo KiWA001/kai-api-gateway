@@ -274,6 +274,12 @@ async def deep_research_endpoint(request: Request):
 # ---------- Routes ----------
 
 
+@app.get("/qazmlpdocs", include_in_schema=False)
+async def qazmlp_docs():
+    """Serve the Secured Dashboard (with Stats)."""
+    return FileResponse("static/qazmlpdocs.html")
+
+
 @app.get("/", tags=["Dashboard"])
 async def root():
     """Serve the HTML Dashboard."""
