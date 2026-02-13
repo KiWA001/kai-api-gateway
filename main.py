@@ -69,6 +69,26 @@ app = FastAPI(
 # Mount static files (for CSS/JS if needed later)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Error Handling (Global)
+from error_handling import openai_error
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Override default 404/401/500 to return OpenAI-style JSON.
+    """
+    code = "invalid_request_error"
+    if exc.status_code == 401: code = "invalid_api_key"
+    if exc.status_code == 429: code = "insufficient_quota"
+    if exc.status_code == 404: code = "model_not_found"
+    if exc.status_code == 500: code = "internal_server_error"
+
+    return openai_error(
+        message=exc.detail,
+        code=code,
+        status_code=exc.status_code
+    )
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,

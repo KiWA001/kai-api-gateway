@@ -8,6 +8,13 @@ from config import DEMO_API_KEY
 from db import get_supabase
 from services import engine
 from utils import calculate_usage
+from error_handling import (
+    openai_error,
+    error_invalid_api_key,
+    error_quota_exceeded,
+    error_model_not_found,
+    error_server
+)
 
 # Initialize Router
 router = APIRouter()
@@ -77,7 +84,7 @@ async def verify_api_key(
         token = x_api_key
         
     if not token:
-        raise HTTPException(status_code=401, detail="Missing API Key")
+        raise HTTPException(status_code=401, detail="Incorrect API Key")
 
     # 1. Check Demo Key
     if token == DEMO_API_KEY:
@@ -86,15 +93,14 @@ async def verify_api_key(
     # 2. Check Database
     supabase = get_supabase()
     if not supabase:
-        # Fallback if DB is down but key matches verified format? No, safer to reject.
-        raise HTTPException(status_code=503, detail="Auth service unavailable")
+        raise HTTPException(status_code=503, detail="Service unavailable")
 
     try:
         # Check if key exists and is active
         res = supabase.table("api_keys").select("*").eq("token", token).execute()
         
         if not res.data:
-            raise HTTPException(status_code=401, detail="Invalid API Key")
+             raise HTTPException(status_code=401, detail="Incorrect API key provided")
             
         key_data = res.data[0]
         
@@ -102,18 +108,19 @@ async def verify_api_key(
             raise HTTPException(status_code=403, detail="API Key is inactive")
             
         # Check limits
-        # Note: We check limit BEFORE processing, but update usage AFTER (bg task)
         current_usage = key_data.get("usage_tokens", 0)
         limit = key_data.get("limit_tokens", 0)
         
         if limit > 0 and current_usage >= limit:
-             raise HTTPException(status_code=429, detail="Quota exceeded")
+             raise HTTPException(status_code=429, detail="You have exceeded your current quota")
              
         return key_data
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Auth Error: {e}")
-        raise HTTPException(status_code=500, detail="Auth Error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # --- Background Task for Usage Update ---
 
@@ -208,5 +215,11 @@ async def chat_completions(
             usage=UsageInfo(**usage)
         )
 
+    except ValueError as e:
+        # Invalid model or params
+        # We need to return the JSON response object, but we are inside an async endpoint.
+        # Direct return works!
+        return error_model_not_found(request.model) if "model" in str(e) else openai_error(str(e), "invalid_request_error")
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_server(str(e))
