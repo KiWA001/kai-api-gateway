@@ -296,10 +296,14 @@
             border-radius: var(--radius-sm);
             padding: 12px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
+            font-size: 11px;
+            /* Reduced font size */
             color: var(--text-secondary);
             white-space: pre-wrap;
             display: none;
+            max-height: 500px;
+            /* Scrollable */
+            overflow-y: auto;
         }
 
         .demo-response.visible {
@@ -658,21 +662,11 @@
 
                 if (!response.ok) throw new Error(data.detail || 'Request failed');
 
-                let contentDisplay = '';
-                if (data.choices && data.choices[0] && data.choices[0].message) {
-                    contentDisplay = `<div style="white-space: pre-wrap; color: #e2e8f0; font-size: 13px; max-height: 400px; overflow-y: auto;">${data.choices[0].message.content}</div>
-                    <div style="margin-top:10px; border-top:1px solid #333; padding-top:5px; font-size:11px; color:#666;">
-                        Model: ${data.model} | Tokens: ${data.usage ? data.usage.total_tokens : '?'}
-                    </div>`;
-                } else {
-                    contentDisplay = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-                }
-
                 resBox.innerHTML = `
                     <div style="margin-bottom:5px; font-weight:bold; color:var(--success);">
                         Success (${duration}ms)
                     </div>
-                    ${contentDisplay}
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
                 `;
 
             } catch (err) {
