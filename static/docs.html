@@ -424,43 +424,7 @@
         </div>
 
 
-        <!-- POST /search & /deep_research -->
-        <div class="endpoint-block">
-            <div class="endpoint-header">
-                <div class="endpoint-title">
-                    <h3>Web Search & Research</h3>
-                    <p>Reverse-engineered web search and deep content gathering. No API keys required.</p>
-                </div>
-                <span class="method-badge">POST /search</span>
-            </div>
-            <div class="endpoint-body">
-                <div class="endpoint-docs">
-                    <span class="demo-label">Endpoints</span>
-                    <ul style="color:var(--text-secondary); font-size:13px; margin-left:18px; margin-bottom:10px;">
-                        <li><code>/search</code>: Standard web search (Links)</li>
-                        <li><code>/deep_research</code>: Deep content gathering (Scraper)</li>
-                    </ul>
-                    <span class="demo-label">Parameters</span>
-                    <table class="param-table">
-                        <tr>
-                            <td><span class="param-name">query</span></td>
-                            <td><span class="param-desc">Search topic</span><span class="param-req">(required)</span>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-                <div class="endpoint-demo">
-                    <span class="demo-label">Try It Live</span>
-                    <input id="search-query" class="demo-input" placeholder="Query" value="When was Python released?">
-                    <select id="search-mode" class="demo-select">
-                        <option value="search">Simple Search (Links)</option>
-                        <option value="deep">Deep Research (Content Gathering)</option>
-                    </select>
-                    <button class="demo-btn" onclick="runSearch()">Execute Search ▶</button>
-                    <div id="search-res" class="demo-response"></div>
-                </div>
-            </div>
-        </div>
+
 
         <!-- POST /chat (Advanced) -->
         <div class="endpoint-block">
@@ -530,6 +494,45 @@
                     <span class="demo-label">Try It Live</span>
                     <button class="demo-btn" onclick="runDemo('models')">Fetch Models ▶</button>
                     <div id="models-res" class="demo-response"></div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- POST /search & /deep_research -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>Web Search & Research</h3>
+                    <p>Reverse-engineered web search and deep content gathering. No API keys required.</p>
+                </div>
+                <span class="method-badge">POST /search</span>
+            </div>
+            <div class="endpoint-body">
+                <div class="endpoint-docs">
+                    <span class="demo-label">Endpoints</span>
+                    <ul style="color:var(--text-secondary); font-size:13px; margin-left:18px; margin-bottom:10px;">
+                        <li><code>/search</code>: Standard web search (Links)</li>
+                        <li><code>/deep_research</code>: Deep content gathering (Scraper)</li>
+                    </ul>
+                    <span class="demo-label">Parameters</span>
+                    <table class="param-table">
+                        <tr>
+                            <td><span class="param-name">query</span></td>
+                            <td><span class="param-desc">Search topic</span><span class="param-req">(required)</span>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="endpoint-demo">
+                    <span class="demo-label">Try It Live</span>
+                    <input id="search-query" class="demo-input" placeholder="Query" value="When was Python released?">
+                    <select id="search-mode" class="demo-select">
+                        <option value="search">Simple Search (Links)</option>
+                        <option value="deep">Deep Research (Content Gathering)</option>
+                    </select>
+                    <button class="demo-btn" onclick="runSearch()">Execute Search ▶</button>
+                    <div id="search-res" class="demo-response"></div>
                 </div>
             </div>
         </div>
@@ -612,7 +615,7 @@
                     'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
                 };
 
-                if (type === 'chat') {
+                if (type === 'chat-basic') {
                     // Simple Chat
                     url = '/v1/chat/completions';
                     body = {
@@ -652,11 +655,21 @@
 
                 if (!response.ok) throw new Error(data.detail || 'Request failed');
 
+                let contentDisplay = '';
+                if (data.choices && data.choices[0] && data.choices[0].message) {
+                    contentDisplay = `<div style="white-space: pre-wrap; color: #e2e8f0; font-size: 14px;">${data.choices[0].message.content}</div>
+                    <div style="margin-top:10px; border-top:1px solid #333; padding-top:5px; font-size:11px; color:#666;">
+                        Model: ${data.model} | Tokens: ${data.usage ? data.usage.total_tokens : '?'}
+                    </div>`;
+                } else {
+                    contentDisplay = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+
                 resBox.innerHTML = `
                     <div style="margin-bottom:5px; font-weight:bold; color:var(--success);">
                         Success (${duration}ms)
                     </div>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                    ${contentDisplay}
                 `;
 
             } catch (err) {
