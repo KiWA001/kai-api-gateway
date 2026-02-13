@@ -277,7 +277,7 @@ async def deep_research_endpoint(request: Request):
 @app.get("/", tags=["Dashboard"])
 async def root():
     """Serve the HTML Dashboard."""
-    return FileResponse("static/docs.html")
+    return FileResponse("static/docs.html", headers={"X-API-Version": "2.0.1-NewAuth"})
 
 
 @app.get(
