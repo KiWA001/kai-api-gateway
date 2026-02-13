@@ -455,8 +455,8 @@
                 </div>
                 <div class="endpoint-demo">
                     <span class="demo-label">Try It Live</span>
-                    <input id="chat-adv-msg" class="demo-input" placeholder="Message" value="Tell me a joke">
-                    <input id="chat-adv-sys" class="demo-input" placeholder="System Prompt" value="Be sarcastic">
+                    <textarea id="chat-adv-msg" class="demo-input" rows="4"
+                        placeholder='Message... (Use "..... system prompts: " to append system instructions)'></textarea>
                     <select id="chat-adv-model" class="demo-select">
                         <option value="">Auto Model (Best Available)</option>
                         <option value="gpt-4">gpt-4</option>
@@ -626,12 +626,15 @@
                 else if (type === 'chat-adv') {
                     // Advanced Chat
                     const model = document.getElementById('chat-adv-model').value || "gemini-3-flash";
+                    const userMsg = document.getElementById('chat-adv-msg').value;
+
+                    if (!userMsg) { alert("Please enter a message"); return; }
+
                     url = '/v1/chat/completions';
                     body = {
                         model: model,
                         messages: [
-                            { role: "system", content: "You are a helpful assistant." },
-                            { role: "user", content: "Tell me a fun fact." }
+                            { role: "user", content: userMsg }
                         ]
                     };
                 }
@@ -657,7 +660,7 @@
 
                 let contentDisplay = '';
                 if (data.choices && data.choices[0] && data.choices[0].message) {
-                    contentDisplay = `<div style="white-space: pre-wrap; color: #e2e8f0; font-size: 14px;">${data.choices[0].message.content}</div>
+                    contentDisplay = `<div style="white-space: pre-wrap; color: #e2e8f0; font-size: 13px; max-height: 400px; overflow-y: auto;">${data.choices[0].message.content}</div>
                     <div style="margin-top:10px; border-top:1px solid #333; padding-top:5px; font-size:11px; color:#666;">
                         Model: ${data.model} | Tokens: ${data.usage ? data.usage.total_tokens : '?'}
                     </div>`;
