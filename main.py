@@ -11,7 +11,7 @@ import os
 
 # Fix for Vercel Read-Only File System
 # Must be set BEFORE importing g4f or engine
-if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or True:
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
     os.environ["HOME"] = "/tmp"
 
 import logging
