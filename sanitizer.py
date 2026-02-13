@@ -110,14 +110,16 @@ def sanitize_response(text: str) -> str:
     cleaned = ARTIFACT_N_PATTERN.sub("\n", cleaned)
 
     # === Unescape JSON/Raw Literals ===
-    # User wants "\n" to be actual newline and "\"" to be actual quote.
-    # We try to unescape, but carefully.
-    if "\\n" in cleaned or '\\"' in cleaned:
-        try:
-            # First try standard replace for safety and speed
-            cleaned = cleaned.replace("\\n", "\n").replace('\\"', '"')
-        except Exception:
-             pass
+    # Robustly decode escape sequences like \n, \", \t using Python's codec
+    try:
+        # If it looks like a JSON string literal (wrapped in quotes), strip them first
+        if cleaned.startswith('"') and cleaned.endswith('"'):
+             cleaned = cleaned[1:-1]
+             
+        cleaned = cleaned.encode('utf-8').decode('unicode_escape')
+    except Exception:
+        # Fallback to manual replacement if codec fails
+        cleaned = cleaned.replace("\\n", "\n").replace('\\"', '"')
 
     # === Spam Removal ===
     for pattern in COMPILED_SPAM:
