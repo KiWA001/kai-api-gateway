@@ -84,25 +84,35 @@ async def verify_api_key(
         token = x_api_key
         
     if not token:
-        raise HTTPException(status_code=401, detail="Incorrect API Key")
+        # ALLOW PUBLIC ACCESS (No Key)
+        # Consistent with "No signup. No keys. Just code."
+        return {"id": "public", "name": "Public User", "limit_tokens": -1}
 
     # 1. Check Demo Key
     if token == DEMO_API_KEY:
         return {"id": "demo", "name": "Demo User", "limit_tokens": -1}
 
-    # 2. Check Database
-    supabase = get_supabase()
-    if not supabase:
-        raise HTTPException(status_code=503, detail="Service unavailable")
+    # 2. Check Database (Non-blocking)
+    import asyncio
+    loop = asyncio.get_event_loop()
+    
+    def _sync_check():
+        supabase = get_supabase()
+        if not supabase:
+             # If DB down, allow access as public/demo? Or fail?
+             # Fail safe: 503
+             raise HTTPException(status_code=503, detail="Service unavailable")
+             
+        res = supabase.table("api_keys").select("*").eq("token", token).execute()
+        if not res.data:
+            return None
+        return res.data[0]
 
     try:
-        # Check if key exists and is active
-        res = supabase.table("api_keys").select("*").eq("token", token).execute()
+        key_data = await loop.run_in_executor(None, _sync_check)
         
-        if not res.data:
+        if not key_data:
              raise HTTPException(status_code=401, detail="Incorrect API key provided")
-            
-        key_data = res.data[0]
         
         if not key_data.get("is_active", True):
             raise HTTPException(status_code=403, detail="API Key is inactive")
@@ -115,6 +125,12 @@ async def verify_api_key(
              raise HTTPException(status_code=429, detail="You have exceeded your current quota")
              
         return key_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Auth Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     except HTTPException:
         raise
