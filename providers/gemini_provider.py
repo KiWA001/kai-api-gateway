@@ -43,7 +43,7 @@ class GeminiProvider(BaseProvider):
         return "gemini"
 
     def get_available_models(self) -> list[str]:
-        return ["gemini-1.5-pro", "gemini-ultra", "gemini-flash"]
+        return ["gemini-3-flash"]
 
     @staticmethod
     def is_available() -> bool:
@@ -89,7 +89,7 @@ class GeminiProvider(BaseProvider):
             raise RuntimeError("Playwright not installed.")
 
         await self._ensure_browser()
-        selected_model = model or "gemini-1.5-pro"
+        selected_model = model or "gemini-3-flash"
         
         # Create Ephemeral Context
         context = await _browser.new_context(

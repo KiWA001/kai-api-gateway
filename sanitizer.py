@@ -36,6 +36,13 @@ SPAM_PATTERNS = [
 
     # Trailing promotional URLs (not part of the actual answer)
     r"\n{2,}\s*https?://(?!(?:en\.)?wikipedia\.org|docs\.|github\.com)[\w./-]+\s*$",
+
+    # Gemini UI Artifacts
+    r"(?i)\n*\s*Export to Sheets\s*",
+    r"(?i)\n*\s*Show drafts\s*",
+    r"(?i)\n*\s*Regenerate drafts\s*",
+    r"(?i)\n*\s*tuneshare\s*",
+    r"(?i)\n*\s*more_vert\s*",
 ]
 
 # Compile patterns once for performance

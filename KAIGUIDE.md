@@ -63,7 +63,8 @@ Uses Playwright Chromium to interact with `chat.z.ai` as a real browser.
 Uses Playwright Chromium to interact with `gemini.google.com` as a real browser.
 -   **Why Browser**: Interaction mimics a real user session (Guest mode or Incognito).
 -   **Input**: `div[contenteditable="true"]`.
--   **Prompt Engineering**: Appends `\n\nanswer in plain text` to ensure clean output.
+-   **Prompt Engineering**: Appends ` ..... answer in plain text` to ensure clean output.
+-   **Model**: `gemini-3-flash` (Fast, efficient, web-based).
 -   **Files**: `providers/gemini_provider.py`, `test_gemini_browser.py`.
 -   **Status**: **Experimental**. Requires local Playwright environment.
 
