@@ -303,7 +303,15 @@
             display: none;
             max-height: 500px;
             /* Scrollable */
+            /* Scrollable */
             overflow-y: auto;
+        }
+
+        .demo-status {
+            margin-top: 12px;
+            font-weight: 600;
+            font-size: 13px;
+            display: none;
         }
 
         .demo-response.visible {
@@ -422,6 +430,7 @@
                     <textarea id="chat-basic-input" class="demo-input" rows="3"
                         placeholder='{"message": "What is AI?"}'>What is the capital of France?</textarea>
                     <button class="demo-btn" onclick="runDemo('chat-basic')">Run Request ▶</button>
+                    <div id="chat-basic-status" class="demo-status"></div>
                     <div id="chat-basic-res" class="demo-response"></div>
                 </div>
             </div>
@@ -475,6 +484,7 @@
                         <option value="midijourney">midijourney</option>
                     </select>
                     <button class="demo-btn" onclick="runDemo('chat-adv')">Run Request ▶</button>
+                    <div id="chat-adv-status" class="demo-status"></div>
                     <div id="chat-adv-res" class="demo-response"></div>
                 </div>
             </div>
@@ -604,79 +614,92 @@
         // Global flag for Pie Chart
         window.pieChartRendered = false;
 
-        async function runDemo(type) {
-            const resBox = document.getElementById(type + '-res');
-            resBox.className = 'demo-response visible';
-            resBox.style.display = 'block';
-            resBox.innerHTML = 'Sending Request... <span class="loading-spin"></span>';
+        const resBox = document.getElementById(type + '-res');
+        const statusBox = document.getElementById(type + '-status');
 
-            const startTime = Date.now();
+        resBox.className = 'demo-response visible';
+        resBox.style.display = 'none'; // Hide content while loading
+        resBox.innerHTML = '';
 
-            try {
-                let url, body, method = 'POST';
-                let headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
+        if (statusBox) {
+            statusBox.style.display = 'block';
+            statusBox.innerHTML = 'Sending Request... <span class="loading-spin"></span>';
+            statusBox.style.color = 'var(--text-muted)';
+        }
+
+        const startTime = Date.now();
+
+        try {
+            let url, body, method = 'POST';
+            let headers = {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
+            };
+
+            if (type === 'chat-basic') {
+                // Simple Chat
+                const inputVal = document.getElementById('chat-basic-input').value;
+                if (!inputVal) { alert("Please enter a message"); return; }
+
+                url = '/v1/chat/completions';
+                body = {
+                    model: "gemini-3-flash",
+                    messages: [{ role: "user", content: inputVal }]
                 };
+            }
+            else if (type === 'chat-adv') {
+                // Advanced Chat
+                const model = document.getElementById('chat-adv-model').value || "gemini-3-flash";
+                const userMsg = document.getElementById('chat-adv-msg').value;
 
-                if (type === 'chat-basic') {
-                    // Simple Chat
-                    url = '/v1/chat/completions';
-                    body = {
-                        model: "gemini-3-flash",
-                        messages: [{ role: "user", content: "Hello! Who are you?" }]
-                    };
-                }
-                else if (type === 'chat-adv') {
-                    // Advanced Chat
-                    const model = document.getElementById('chat-adv-model').value || "gemini-3-flash";
-                    const userMsg = document.getElementById('chat-adv-msg').value;
+                if (!userMsg) { alert("Please enter a message"); return; }
 
-                    if (!userMsg) { alert("Please enter a message"); return; }
+                url = '/v1/chat/completions';
+                body = {
+                    model: model,
+                    messages: [
+                        { role: "user", content: userMsg }
+                    ]
+                };
+            }
+            else if (type === 'models') {
+                // List Models
+                url = '/models'; // This is GET, no body
+                method = 'GET';
+                body = undefined;
+                // Keep models as public? Or require auth? 
+                // Usually /models is authenticated in OpenAI but let's keep it open for now or add auth.
+            }
 
-                    url = '/v1/chat/completions';
-                    body = {
-                        model: model,
-                        messages: [
-                            { role: "user", content: userMsg }
-                        ]
-                    };
-                }
-                else if (type === 'models') {
-                    // List Models
-                    url = '/models'; // This is GET, no body
-                    method = 'GET';
-                    body = undefined;
-                    // Keep models as public? Or require auth? 
-                    // Usually /models is authenticated in OpenAI but let's keep it open for now or add auth.
-                }
+            const response = await fetch(url, {
+                method: method,
+                headers: headers,
+                body: body ? JSON.stringify(body) : undefined
+            });
 
-                const response = await fetch(url, {
-                    method: method,
-                    headers: headers,
-                    body: body ? JSON.stringify(body) : undefined
-                });
+            const data = await response.json();
+            const duration = Date.now() - startTime;
 
-                const data = await response.json();
-                const duration = Date.now() - startTime;
+            if (!response.ok) throw new Error(data.detail || 'Request failed');
 
-                if (!response.ok) throw new Error(data.detail || 'Request failed');
+            if (!response.ok) throw new Error(data.detail || 'Request failed');
 
-                resBox.innerHTML = `
-                    <div style="margin-bottom:5px; font-weight:bold; color:var(--success);">
-                        Success (${duration}ms)
-                    </div>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                `;
+            if (statusBox) {
+                statusBox.innerHTML = `Success (${duration}ms)`;
+                statusBox.style.color = 'var(--success)';
+            }
 
-            } catch (err) {
-                resBox.innerHTML = `
+            resBox.style.display = 'block';
+            resBox.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+        } catch (err) {
+            resBox.innerHTML = `
                     <div style="margin-bottom:5px; font-weight:bold; color:var(--error);">
                         Error
                     </div>
                     <pre>${err.message}</pre>
                 `;
-            }
+        }
         }
 
         async function runSearch() {
