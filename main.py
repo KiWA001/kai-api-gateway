@@ -282,6 +282,9 @@ async def root():
 )
 async def list_models():
     """List all available AI models across all providers."""
+    if not engine:
+        return ModelsResponse(models=[], total=0)
+        
     models = engine.get_all_models()
     return ModelsResponse(
         models=models,
@@ -297,9 +300,17 @@ async def list_models():
 async def health_check():
     """
     Run health checks on all providers.
-
-    Returns the status of each provider and overall system health.
     """
+    if not engine:
+        return HealthResponse(
+            status="unhealthy",
+            version="2.0.0",
+            uptime=0, # TODO: Track uptime
+            providers={},
+            error="AI Engine failed to initialize (check logs)"
+        )
+        
+    # Get provider health
     logger.info("Running health checks...")
     results = await engine.health_check_all()
 

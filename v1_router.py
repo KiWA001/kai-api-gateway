@@ -184,6 +184,9 @@ async def chat_completions(
     provider = request.provider or "auto"
     
     try:
+        if not engine:
+            raise HTTPException(status_code=503, detail="AI Engine is not initialized (Startup Error)")
+            
         result = await engine.chat(
             prompt=user_prompt,
             model=request.model,
