@@ -614,92 +614,93 @@
         // Global flag for Pie Chart
         window.pieChartRendered = false;
 
-        const resBox = document.getElementById(type + '-res');
-        const statusBox = document.getElementById(type + '-status');
+        async function runDemo(type) {
+            const resBox = document.getElementById(type + '-res');
+            const statusBox = document.getElementById(type + '-status');
 
-        resBox.className = 'demo-response visible';
-        resBox.style.display = 'none'; // Hide content while loading
-        resBox.innerHTML = '';
-
-        if (statusBox) {
-            statusBox.style.display = 'block';
-            statusBox.innerHTML = 'Sending Request... <span class="loading-spin"></span>';
-            statusBox.style.color = 'var(--text-muted)';
-        }
-
-        const startTime = Date.now();
-
-        try {
-            let url, body, method = 'POST';
-            let headers = {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
-            };
-
-            if (type === 'chat-basic') {
-                // Simple Chat
-                const inputVal = document.getElementById('chat-basic-input').value;
-                if (!inputVal) { alert("Please enter a message"); return; }
-
-                url = '/v1/chat/completions';
-                body = {
-                    model: "gemini-3-flash",
-                    messages: [{ role: "user", content: inputVal }]
-                };
-            }
-            else if (type === 'chat-adv') {
-                // Advanced Chat
-                const model = document.getElementById('chat-adv-model').value || "gemini-3-flash";
-                const userMsg = document.getElementById('chat-adv-msg').value;
-
-                if (!userMsg) { alert("Please enter a message"); return; }
-
-                url = '/v1/chat/completions';
-                body = {
-                    model: model,
-                    messages: [
-                        { role: "user", content: userMsg }
-                    ]
-                };
-            }
-            else if (type === 'models') {
-                // List Models
-                url = '/models'; // This is GET, no body
-                method = 'GET';
-                body = undefined;
-                // Keep models as public? Or require auth? 
-                // Usually /models is authenticated in OpenAI but let's keep it open for now or add auth.
-            }
-
-            const response = await fetch(url, {
-                method: method,
-                headers: headers,
-                body: body ? JSON.stringify(body) : undefined
-            });
-
-            const data = await response.json();
-            const duration = Date.now() - startTime;
-
-            if (!response.ok) throw new Error(data.detail || 'Request failed');
-
-            if (!response.ok) throw new Error(data.detail || 'Request failed');
+            resBox.className = 'demo-response visible';
+            resBox.style.display = 'none'; // Hide content while loading
+            resBox.innerHTML = '';
 
             if (statusBox) {
-                statusBox.innerHTML = `Success (${duration}ms)`;
-                statusBox.style.color = 'var(--success)';
+                statusBox.style.display = 'block';
+                statusBox.innerHTML = 'Sending Request... <span class="loading-spin"></span>';
+                statusBox.style.color = 'var(--text-muted)';
             }
 
-            resBox.style.display = 'block';
-            resBox.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            const startTime = Date.now();
 
-        } catch (err) {
-            resBox.innerHTML = `
+            try {
+                let url, body, method = 'POST';
+                let headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
+                };
+
+                if (type === 'chat-basic') {
+                    // Simple Chat
+                    const inputVal = document.getElementById('chat-basic-input').value;
+                    if (!inputVal) { alert("Please enter a message"); return; }
+
+                    url = '/v1/chat/completions';
+                    body = {
+                        model: "gemini-3-flash",
+                        messages: [{ role: "user", content: inputVal }]
+                    };
+                }
+                else if (type === 'chat-adv') {
+                    // Advanced Chat
+                    const model = document.getElementById('chat-adv-model').value || "gemini-3-flash";
+                    const userMsg = document.getElementById('chat-adv-msg').value;
+
+                    if (!userMsg) { alert("Please enter a message"); return; }
+
+                    url = '/v1/chat/completions';
+                    body = {
+                        model: model,
+                        messages: [
+                            { role: "user", content: userMsg }
+                        ]
+                    };
+                }
+                else if (type === 'models') {
+                    // List Models
+                    url = '/models'; // This is GET, no body
+                    method = 'GET';
+                    body = undefined;
+                    // Keep models as public? Or require auth? 
+                    // Usually /models is authenticated in OpenAI but let's keep it open for now or add auth.
+                }
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: headers,
+                    body: body ? JSON.stringify(body) : undefined
+                });
+
+                const data = await response.json();
+                const duration = Date.now() - startTime;
+
+                if (!response.ok) throw new Error(data.detail || 'Request failed');
+
+                if (!response.ok) throw new Error(data.detail || 'Request failed');
+
+                if (statusBox) {
+                    statusBox.innerHTML = `Success (${duration}ms)`;
+                    statusBox.style.color = 'var(--success)';
+                }
+
+                resBox.style.display = 'block';
+                resBox.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+            } catch (err) {
+                resBox.innerHTML = `
                     <div style="margin-bottom:5px; font-weight:bold; color:var(--error);">
                         Error
                     </div>
                     <pre>${err.message}</pre>
                 `;
-        }
+            }
         }
 
         async function runSearch() {
