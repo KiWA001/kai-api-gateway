@@ -111,15 +111,20 @@ def sanitize_response(text: str) -> str:
 
     # === Unescape JSON/Raw Literals ===
     # Robustly decode escape sequences like \n, \", \t using Python's codec
-    try:
-        # If it looks like a JSON string literal (wrapped in quotes), strip them first
-        if cleaned.startswith('"') and cleaned.endswith('"'):
-             cleaned = cleaned[1:-1]
-             
-        cleaned = cleaned.encode('utf-8').decode('unicode_escape')
-    except Exception:
-        # Fallback to manual replacement if codec fails
-        cleaned = cleaned.replace("\\n", "\n").replace('\\"', '"')
+    # We do this up to 2 times to catch double-encoded strings (common in some scraped JSON)
+    for _ in range(2):
+        try:
+            if "\\n" not in cleaned and '\\"' not in cleaned:
+                break
+                
+            # If it looks like a JSON string literal (wrapped in quotes), strip them first
+            if cleaned.startswith('"') and cleaned.endswith('"'):
+                 cleaned = cleaned[1:-1]
+                 
+            cleaned = cleaned.encode('utf-8').decode('unicode_escape')
+        except Exception:
+            # Fallback to manual replacement if codec fails
+            cleaned = cleaned.replace("\\n", "\n").replace('\\"', '"')
 
     # === Spam Removal ===
     for pattern in COMPILED_SPAM:
