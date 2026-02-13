@@ -38,8 +38,17 @@ from models import (
     HealthResponse,
     ProviderHealth,
 )
-from engine import AIEngine
-from search_engine import SearchEngine
+from models import (
+    ChatRequest,
+    ChatResponse,
+    ErrorResponse,
+    ModelsResponse,
+    HealthResponse,
+    ProviderHealth,
+)
+from services import engine, search_engine
+from v1_router import router as v1_router
+from admin_router import router as admin_router
 
 # ---------- Logging ----------
 logging.basicConfig(
@@ -69,9 +78,13 @@ app.add_middleware(
     allow_headers=CORS_HEADERS,
 )
 
-# AI Engine (initialized once, but each request is stateless internally)
-engine = AIEngine()
-search_engine = SearchEngine()
+# AI Engine (initialized via services.py)
+# engine = AIEngine() -> Moved to services.py
+# search_engine = SearchEngine() -> Moved to services.py
+
+# Include OpenAI Router
+app.include_router(v1_router)
+app.include_router(admin_router)
 
 
 # ---------- Admin Routes ----------

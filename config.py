@@ -63,6 +63,9 @@ POLLINATIONS_MODEL_NAMES = {
     "midijourney": "midijourney",
 }
 
+# API Keys
+DEMO_API_KEY = "sk-kai-demo-public"
+
 # Models per provider (for /models endpoint)
 PROVIDER_MODELS = {
     "g4f": [
