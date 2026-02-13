@@ -24,6 +24,7 @@ MODEL_RANKING = [
     ("gpt-4", "g4f", "gpt-4"),
     ("gpt-4o-mini", "g4f", "gpt-4o-mini"),
     ("glm-5", "zai", "glm-5"),
+    ("gemini-1.5-pro", "gemini", "gemini-1.5-pro"),
     ("gpt-oss-20b", "pollinations", "openai"),
     ("mistral-small-3.2", "pollinations", "mistral"),
     
@@ -73,6 +74,9 @@ PROVIDER_MODELS = {
     ],
     "zai": [
         "glm-5",
+    ],
+    "gemini": [
+        "gemini-1.5-pro",
     ],
     "pollinations": [
         "gpt-oss-20b",
