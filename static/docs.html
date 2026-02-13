@@ -447,56 +447,7 @@
 
 
 
-        <!-- POST /chat (Advanced) -->
-        <div class="endpoint-block">
-            <div class="endpoint-header">
-                <div class="endpoint-title">
-                    <h3>Chat (Advanced)</h3>
-                    <p>Select specific models, providers, or add system instructions.</p>
-                </div>
-                <span class="method-badge">POST /v1/chat/completions</span>
-            </div>
-            <div class="endpoint-body">
-                <div class="endpoint-docs">
-                    <span class="demo-label">Parameters</span>
-                    <table class="param-table">
-                        <tr>
-                            <td><span class="param-name">model</span></td>
-                            <td><span class="param-desc">Specific model (e.g. gpt-4o)</span></td>
-                        </tr>
-                        <tr>
-                            <td><span class="param-name">provider</span></td>
-                            <td><span class="param-desc">Specific provider (g4f, pollinations)</span></td>
-                        </tr>
-                        <tr>
-                            <td><span class="param-name">system_prompt</span></td>
-                            <td><span class="param-desc">AI instructions</span></td>
-                        </tr>
-                    </table>
-                </div>
-                <div class="endpoint-demo">
-                    <span class="demo-label">Try It Live</span>
-                    <textarea id="chat-adv-msg" class="demo-input"
-                        rows="4">What does artificial intelligence mean?</textarea>
-                    <select id="chat-adv-model" class="demo-select">
-                        <option value="">Auto Model (Best Available)</option>
-                        <option value="gpt-4">gpt-4</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
 
-                        <option value="gemini-3-flash">gemini-3-flash (Gemini)</option>
-                        <option value="glm-5">glm-5 (Z.ai)</option>
-                        <option value="gpt-oss-20b">gpt-oss-20b</option>
-                        <option value="mistral-small-3.2">mistral-small-3.2</option>
-                        <option value="bidara">bidara</option>
-                        <option value="chickytutor">chickytutor</option>
-                        <option value="midijourney">midijourney</option>
-                    </select>
-                    <button class="demo-btn" onclick="runDemo('chat-adv')">Run Request ▶</button>
-                    <div id="chat-adv-status" class="demo-status"></div>
-                    <div id="chat-adv-res" class="demo-response"></div>
-                </div>
-            </div>
-        </div>
 
         <!-- GET /models -->
         <div class="endpoint-block">
