@@ -276,8 +276,8 @@ async def deep_research_endpoint(request: Request):
 
 @app.get("/qazmlpdocs", include_in_schema=False)
 async def qazmlp_docs():
-    """Serve the Secured Dashboard (Alias to Root)."""
-    return FileResponse("static/docs.html")
+    """Serve the Secured Dashboard."""
+    return FileResponse("static/qazmlpdocs.html")
 
 @app.get("/docs/public", include_in_schema=False)
 async def public_docs_page():
