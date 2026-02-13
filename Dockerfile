@@ -21,17 +21,16 @@ RUN playwright install chromium
 # Copy application code
 COPY . .
 
-# Create a non-root user (Hugging Face Spaces requirement)
-# UID 1000 is taken by the base image, so we use 1001
-RUN useradd -m -u 1001 user
+# Remove user creation for debugging permissions
+# RUN useradd -m -u 1001 user
+# RUN chown -R user:user /app
+# USER user
+# ENV HOME=/home/user
+# ENV PATH=$HOME/.local/bin:$PATH
 
-# Ensure the user owns the application directory
-# This is CRITICAL for g4f/playwright to write temporary files/caches
-RUN chown -R user:user /app
-
-USER user
-ENV HOME=/home/user
-ENV PATH=$HOME/.local/bin:$PATH
+# Run as root for now to fix 404 crash
+ENV HOME=/root
+ENV PATH=/root/.local/bin:$PATH
 
 # Expose the port (Hugging Face uses 7860 by default)
 EXPOSE 7860

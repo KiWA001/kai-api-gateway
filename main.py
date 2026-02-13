@@ -8,6 +8,11 @@ Run with:  uvicorn main:app --host 0.0.0.0 --port 8000
 """
 
 import os
+import sys
+
+print("🔥 STARTING K-AI API... 🔥", file=sys.stderr)
+print(f"Current Working Directory: {os.getcwd()}", file=sys.stderr)
+print(f"Directory Contents: {os.listdir('.')}", file=sys.stderr)
 
 # Fix for Vercel Read-Only File System
 # Must be set BEFORE importing g4f or engine
