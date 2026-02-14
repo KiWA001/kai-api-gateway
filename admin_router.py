@@ -366,3 +366,56 @@ async def close_copilot_portal():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class PortalClick(BaseModel):
+    x: float
+    y: float
+
+@router.post("/copilot/portal/click")
+async def portal_click(req: PortalClick):
+    """Click at specific coordinates on the portal page."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        
+        if not portal.is_initialized:
+            raise HTTPException(status_code=400, detail="Portal not initialized. Start it first.")
+        
+        await portal.click_at_coordinates(req.x, req.y)
+        
+        return {
+            "status": "success",
+            "message": f"Clicked at coordinates ({req.x}, {req.y})"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/copilot/portal/click_checkbox")
+async def portal_click_checkbox():
+    """Click on the CAPTCHA checkbox (estimated position)."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        
+        if not portal.is_initialized:
+            raise HTTPException(status_code=400, detail="Portal not initialized. Start it first.")
+        
+        # CAPTCHA checkbox is typically in the center of the screen
+        # Based on 1280x800 viewport, center is approximately (640, 400)
+        # The checkbox in your screenshot appears to be slightly above center
+        await portal.click_at_coordinates(640, 350)
+        
+        return {
+            "status": "success",
+            "message": "Clicked CAPTCHA checkbox area"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

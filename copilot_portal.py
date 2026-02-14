@@ -189,6 +189,21 @@ class CopilotPortal:
         except Exception as e:
             logger.error(f"Refresh error: {e}")
     
+    async def click_at_coordinates(self, x: float, y: float):
+        """Click at specific coordinates on the page."""
+        if not self.page:
+            logger.error("Portal: No page available for click")
+            return
+        
+        try:
+            logger.info(f"Portal: Clicking at coordinates ({x}, {y})")
+            await self.page.mouse.click(x, y)
+            await asyncio.sleep(1)  # Wait for any response
+            await self.take_screenshot()
+            logger.info("Portal: Click completed")
+        except Exception as e:
+            logger.error(f"Portal click error: {e}")
+    
     async def close(self):
         """Close the browser."""
         try:

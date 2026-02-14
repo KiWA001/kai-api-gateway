@@ -639,6 +639,111 @@
                 sendPortalMessage();
             }
         });
+        
+        // Handle screenshot clicks
+        async function handleScreenshotClick(event) {
+            const img = event.target;
+            const rect = img.getBoundingClientRect();
+            
+            // Calculate click coordinates relative to image
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            // Scale to actual browser viewport (1280x800)
+            const scaleX = 1280 / rect.width;
+            const scaleY = 800 / rect.height;
+            
+            const browserX = Math.round(x * scaleX);
+            const browserY = Math.round(y * scaleY);
+            
+            // Show coordinates
+            const coordDiv = document.getElementById('click-coordinates');
+            coordDiv.textContent = `Clicking: (${browserX}, ${browserY})`;
+            coordDiv.style.display = 'block';
+            
+            try {
+                const res = await fetch('/qaz/copilot/portal/click', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: browserX, y: browserY })
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    coordDiv.textContent = `✅ Clicked: (${browserX}, ${browserY})`;
+                    setTimeout(() => {
+                        coordDiv.style.display = 'none';
+                        refreshPortalScreenshot();
+                    }, 1000);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                coordDiv.textContent = `❌ Error: ${e.message}`;
+                setTimeout(() => {
+                    coordDiv.style.display = 'none';
+                }, 2000);
+            }
+        }
+        
+        async function clickCaptchaCheckbox() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Clicking...';
+            
+            try {
+                const res = await fetch('/qaz/copilot/portal/click_checkbox', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    btn.textContent = '✅ Clicked!';
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = '☑️ Click CAPTCHA Checkbox';
+                        refreshPortalScreenshot();
+                    }, 1000);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '☑️ Click CAPTCHA Checkbox';
+            }
+        }
+        
+        async function clickCaptchaCenter() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Clicking...';
+            
+            try {
+                // Click center of screen (640, 400)
+                const res = await fetch('/qaz/copilot/portal/click', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: 640, y: 400 })
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    btn.textContent = '✅ Clicked!';
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = '🎯 Click Screen Center';
+                        refreshPortalScreenshot();
+                    }, 1000);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '🎯 Click Screen Center';
+            }
+        }
     </script>
     
     <!-- Copilot Interactive Portal -->
@@ -655,13 +760,33 @@
         </button>
         
         <div id="portal-controls" style="display: none; margin-top: 25px;">
-            <!-- Screenshot Display -->
+            <!-- Screenshot Display with Click Support -->
             <div style="background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="font-weight: 600; color: var(--text-muted);">Live Browser View</span>
+                    <span style="font-weight: 600; color: var(--text-muted);">Live Browser View (Click anywhere to interact!)</span>
                     <span style="font-size: 12px; color: var(--text-muted);">Auto-refreshes every 3s</span>
                 </div>
-                <img id="portal-screenshot" src="" alt="Browser Screenshot" style="width: 100%; border-radius: 4px; border: 1px solid var(--border);">
+                <div style="position: relative; cursor: crosshair;" id="screenshot-container">
+                    <img id="portal-screenshot" src="" alt="Browser Screenshot" style="width: 100%; border-radius: 4px; border: 1px solid var(--border); display: block;"
+                        onclick="handleScreenshotClick(event)">
+                    <div id="click-coordinates" style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; display: none;"></div>
+                </div>
+            </div>
+            
+            <!-- CAPTCHA Helper -->
+            <div style="background: var(--warning); background-opacity: 0.1; border: 2px solid var(--warning); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                <h4 style="color: var(--warning); margin-bottom: 10px;">🤖 CAPTCHA Helper</h4>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 10px;">
+                    If you see a "Verify you are human" checkbox, click this button or click directly on the checkbox in the image above.
+                </p>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="clickCaptchaCheckbox()" style="background: var(--warning); color: black; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                        ☑️ Click CAPTCHA Checkbox
+                    </button>
+                    <button onclick="clickCaptchaCenter()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                        🎯 Click Screen Center
+                    </button>
+                </div>
             </div>
             
             <!-- Control Buttons -->
@@ -696,7 +821,7 @@
             </div>
             
             <p style="color: var(--text-muted); font-size: 12px; margin-top: 15px;">
-                💡 <strong>Tip:</strong> If you see a CAPTCHA, solve it in the screenshot above, then send a test message to verify it works.
+                💡 <strong>Tip:</strong> Click anywhere on the screenshot to interact! The click coordinates will be sent to the browser. After solving CAPTCHA, send a test message.
             </p>
         </div>
     </div>
