@@ -45,13 +45,13 @@ async def test_huggingchat():
         return False
 
     # Test with specific model
-    print("\n📝 Test 2: Using Llama 3.3 70B")
+    print("\n📝 Test 2: Using DeepSeek R1")
     print("-" * 50)
 
     try:
         result = await provider.send_message(
             "What is 2+2? Answer with just the number.",
-            model="meta-llama/Llama-3.3-70B-Instruct"
+            model="huggingface-deepseek-r1"
         )
         print(f"✅ SUCCESS!")
         print(f"🤖 Model: {result['model']}")
