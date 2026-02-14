@@ -98,7 +98,6 @@ $$ language plpgsql;
 
 -- Grant permissions
 grant all on provider_sessions to anon, authenticated;
-grant all on sequence provider_sessions_id_seq to anon, authenticated;
 grant execute on function upsert_provider_session to anon, authenticated;
 grant execute on function increment_conversation_count to anon, authenticated;
 
