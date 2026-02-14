@@ -747,8 +747,14 @@
                 });
                 
                 if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.detail || 'Key not found');
+                    let errorMessage = 'Key not found';
+                    try {
+                        const error = await res.json();
+                        errorMessage = error.detail || error.message || JSON.stringify(error) || 'Key not found';
+                    } catch (parseError) {
+                        errorMessage = 'Key not found or server error';
+                    }
+                    throw new Error(errorMessage);
                 }
                 
                 const data = await res.json();
@@ -787,7 +793,8 @@
                 
             } catch (e) {
                 errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Error: ' + e.message;
+                const errorMsg = e.message || (typeof e === 'object' ? JSON.stringify(e) : String(e));
+                errorDiv.textContent = 'Error: ' + errorMsg;
                 resultDiv.style.display = 'none';
             }
         }
