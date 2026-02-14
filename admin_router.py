@@ -240,3 +240,129 @@ async def copilot_session_status():
         return session_info
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Interactive Copilot Portal ---
+
+@router.post("/copilot/portal/start")
+async def start_copilot_portal():
+    """Start the interactive Copilot browser portal."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        await portal.initialize()
+        
+        return {
+            "status": "success",
+            "message": "Portal started successfully",
+            "initialized": portal.is_initialized
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/copilot/portal/screenshot")
+async def get_portal_screenshot():
+    """Get the latest portal screenshot."""
+    import os
+    from fastapi.responses import FileResponse
+    
+    try:
+        from copilot_portal import get_portal
+        portal = get_portal()
+        
+        if not portal.is_initialized:
+            raise HTTPException(status_code=400, detail="Portal not initialized. Start it first.")
+        
+        # Take fresh screenshot
+        await portal.take_screenshot()
+        
+        screenshot_path = "/tmp/copilot_portal.png"
+        if not os.path.exists(screenshot_path):
+            raise HTTPException(status_code=404, detail="Screenshot not available")
+        
+        return FileResponse(screenshot_path, media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class PortalMessage(BaseModel):
+    message: str
+
+@router.post("/copilot/portal/send")
+async def send_portal_message(req: PortalMessage):
+    """Send a message through the portal."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        
+        if not portal.is_initialized:
+            raise HTTPException(status_code=400, detail="Portal not initialized. Start it first.")
+        
+        response = await portal.send_message(req.message)
+        
+        return {
+            "status": "success",
+            "response": response
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/copilot/portal/newchat")
+async def portal_new_chat():
+    """Click New Chat button in the portal."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        
+        if not portal.is_initialized:
+            raise HTTPException(status_code=400, detail="Portal not initialized. Start it first.")
+        
+        await portal.click_new_chat()
+        
+        return {
+            "status": "success",
+            "message": "New chat clicked"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/copilot/portal/refresh")
+async def portal_refresh():
+    """Refresh the portal page."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        
+        if not portal.is_initialized:
+            raise HTTPException(status_code=400, detail="Portal not initialized. Start it first.")
+        
+        await portal.refresh_page()
+        
+        return {
+            "status": "success",
+            "message": "Page refreshed"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/copilot/portal/close")
+async def close_copilot_portal():
+    """Close the portal browser."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        await portal.close()
+        
+        return {
+            "status": "success",
+            "message": "Portal closed"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

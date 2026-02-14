@@ -522,112 +522,184 @@
             }
         });
         
-        // Copilot CAPTCHA handling
-        async function checkCopilotCaptchaStatus() {
+        // Copilot Interactive Portal
+        let portalRefreshInterval = null;
+        
+        async function startCopilotPortal() {
+            const btn = document.getElementById('portal-start-btn');
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+            
             try {
-                const res = await fetch('/qaz/copilot/captcha/status');
+                const res = await fetch('/qaz/copilot/portal/start', { method: 'POST' });
                 const data = await res.json();
                 
-                if (data.captcha_required) {
-                    document.getElementById('copilot-captcha-section').style.display = 'block';
-                    document.getElementById('copilot-captcha-img').src = data.screenshot_url + '?t=' + new Date().getTime();
+                if (data.status === 'success') {
+                    document.getElementById('portal-controls').style.display = 'block';
+                    document.getElementById('portal-status').textContent = '✅ Portal Active';
+                    document.getElementById('portal-status').style.color = 'var(--success)';
+                    
+                    // Start auto-refresh
+                    refreshPortalScreenshot();
+                    portalRefreshInterval = setInterval(refreshPortalScreenshot, 3000);
                 } else {
-                    document.getElementById('copilot-captcha-section').style.display = 'none';
+                    throw new Error(data.message || 'Failed to start');
                 }
             } catch (e) {
-                console.error('Failed to check Copilot CAPTCHA status:', e);
+                alert('Error starting portal: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '🚀 Start Browser Portal';
             }
         }
         
-        async function markCaptchaSolved() {
+        async function refreshPortalScreenshot() {
+            const img = document.getElementById('portal-screenshot');
+            img.src = '/qaz/copilot/portal/screenshot?t=' + new Date().getTime();
+        }
+        
+        async function sendPortalMessage() {
+            const input = document.getElementById('portal-message-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            const btn = document.getElementById('portal-send-btn');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            
             try {
-                const res = await fetch('/qaz/copilot/captcha/solved', { method: 'POST' });
+                const res = await fetch('/qaz/copilot/portal/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                
                 const data = await res.json();
-                alert(data.message);
-                document.getElementById('copilot-captcha-section').style.display = 'none';
+                
+                if (data.status === 'success') {
+                    input.value = '';
+                    document.getElementById('portal-response').textContent = data.response;
+                    document.getElementById('portal-response').style.display = 'block';
+                    
+                    // Refresh screenshot after a delay
+                    setTimeout(refreshPortalScreenshot, 2000);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Send Message';
+            }
+        }
+        
+        async function portalNewChat() {
+            try {
+                await fetch('/qaz/copilot/portal/newchat', { method: 'POST' });
+                setTimeout(refreshPortalScreenshot, 1000);
             } catch (e) {
                 alert('Error: ' + e.message);
             }
         }
         
-        async function clearCaptchaState() {
-            if (!confirm('Clear CAPTCHA state and retry?')) return;
+        async function portalRefresh() {
             try {
-                const res = await fetch('/qaz/copilot/captcha/clear', { method: 'POST' });
-                const data = await res.json();
-                alert(data.message);
-                document.getElementById('copilot-captcha-section').style.display = 'none';
+                await fetch('/qaz/copilot/portal/refresh', { method: 'POST' });
+                setTimeout(refreshPortalScreenshot, 3000);
             } catch (e) {
                 alert('Error: ' + e.message);
             }
         }
         
-        // Check CAPTCHA status periodically
-        checkCopilotCaptchaStatus();
-        setInterval(checkCopilotCaptchaStatus, 10000);
+        async function closePortal() {
+            if (!confirm('Close the browser portal?')) return;
+            
+            try {
+                await fetch('/qaz/copilot/portal/close', { method: 'POST' });
+                
+                if (portalRefreshInterval) {
+                    clearInterval(portalRefreshInterval);
+                    portalRefreshInterval = null;
+                }
+                
+                document.getElementById('portal-controls').style.display = 'none';
+                document.getElementById('portal-status').textContent = '❌ Portal Closed';
+                document.getElementById('portal-status').style.color = 'var(--text-muted)';
+                document.getElementById('portal-start-btn').disabled = false;
+                document.getElementById('portal-start-btn').textContent = '🚀 Start Browser Portal';
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // Allow Enter key to send message
+        document.getElementById('portal-message-input')?.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendPortalMessage();
+            }
+        });
     </script>
     
-    <!-- Copilot CAPTCHA Section -->
-    <div id="copilot-captcha-section" class="card" style="margin-top: 30px; display: none; border: 2px solid var(--warning);">
-        <h2 style="color: var(--warning); margin-bottom: 15px;">⚠️ Copilot CAPTCHA Required</h2>
+    <!-- Copilot Interactive Portal -->
+    <div class="card" style="margin-top: 30px; border: 2px solid var(--accent);">
+        <h2 style="margin-bottom: 15px; color: var(--accent);">🖥️ Copilot Interactive Portal</h2>
         <p style="color: var(--text-muted); margin-bottom: 20px;">
-            Microsoft Copilot is requesting a CAPTCHA verification. Please solve it below, then click "I've Solved It".
+            Control the browser directly to interact with Microsoft Copilot. You can see the page, solve CAPTCHAs, and send messages.
         </p>
         
-        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <img id="copilot-captcha-img" src="" alt="CAPTCHA Screenshot" style="max-width: 100%; border-radius: 4px; display: block; margin: 0 auto;">
-        </div>
+        <div id="portal-status" style="margin-bottom: 20px; font-weight: 600; color: var(--text-muted);">❌ Portal Not Started</div>
         
-        <div style="display: flex; gap: 10px;">
-            <button onclick="markCaptchaSolved()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
-                ✅ I've Solved It
-            </button>
-            <button onclick="checkCopilotCaptchaStatus()" style="background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                🔄 Refresh Screenshot
-            </button>
-            <button onclick="clearCaptchaState()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                🗑️ Clear & Retry
-            </button>
-        </div>
-    </div>
-    
-    <!-- Copilot Session Status -->
-    <div class="card" style="margin-top: 30px;">
-        <h2 style="margin-bottom: 15px;">Copilot Session Status</h2>
-        <div id="copilot-session-info" style="color: var(--text-muted);">
-            <button onclick="checkCopilotSession()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Check Status</button>
-        </div>
-    </div>
-    
-    <script>
-        async function checkCopilotSession() {
-            try {
-                const res = await fetch('/qaz/copilot/session/status');
-                const data = await res.json();
+        <button id="portal-start-btn" onclick="startCopilotPortal()" style="background: var(--accent); color: white; border: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 16px;">
+            🚀 Start Browser Portal
+        </button>
+        
+        <div id="portal-controls" style="display: none; margin-top: 25px;">
+            <!-- Screenshot Display -->
+            <div style="background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-weight: 600; color: var(--text-muted);">Live Browser View</span>
+                    <span style="font-size: 12px; color: var(--text-muted);">Auto-refreshes every 3s</span>
+                </div>
+                <img id="portal-screenshot" src="" alt="Browser Screenshot" style="width: 100%; border-radius: 4px; border: 1px solid var(--border);">
+            </div>
+            
+            <!-- Control Buttons -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button onclick="portalNewChat()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                    🆕 New Chat
+                </button>
+                <button onclick="portalRefresh()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                    🔄 Refresh Page
+                </button>
+                <button onclick="refreshPortalScreenshot()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                    📸 Screenshot
+                </button>
+                <button onclick="closePortal()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                    🗑️ Close
+                </button>
+            </div>
+            
+            <!-- Message Input -->
+            <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
+                <label style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--text-muted);">Send Message to Copilot</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="portal-message-input" placeholder="Type your message here..." 
+                        style="flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; font-size: 14px;">
+                    <button id="portal-send-btn" onclick="sendPortalMessage()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        Send
+                    </button>
+                </div>
                 
-                const infoDiv = document.getElementById('copilot-session-info');
-                if (data.has_session) {
-                    infoDiv.innerHTML = `
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                            <div><strong>Status:</strong> <span style="color: var(--success);">✅ Active</span></div>
-                            <div><strong>Cookies:</strong> ${data.cookie_count}</div>
-                            <div><strong>Days Remaining:</strong> ${data.days_remaining}</div>
-                            <div><strong>Expires:</strong> ${new Date(data.expires_at).toLocaleDateString()}</div>
-                        </div>
-                        <button onclick="checkCopilotSession()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 15px;">Refresh</button>
-                    `;
-                } else {
-                    infoDiv.innerHTML = `
-                        <div><strong>Status:</strong> <span style="color: var(--error);">❌ No Active Session</span></div>
-                        <p style="margin-top: 10px; font-size: 13px;">${data.message}</p>
-                        <button onclick="checkCopilotSession()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 10px;">Refresh</button>
-                    `;
-                }
-            } catch (e) {
-                document.getElementById('copilot-session-info').innerHTML = '<span style="color: var(--error);">Error checking status</span>';
-            }
-        }
-    </script>
+                <!-- Response Display -->
+                <div id="portal-response" style="display: none; margin-top: 15px; padding: 15px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; font-family: monospace; font-size: 13px; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 15px;">
+                💡 <strong>Tip:</strong> If you see a CAPTCHA, solve it in the screenshot above, then send a test message to verify it works.
+            </p>
+        </div>
+    </div>
 </body>
 
 </html>
