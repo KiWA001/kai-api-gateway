@@ -27,6 +27,12 @@ class CreateKeyRequest(BaseModel):
 class LookupKeyRequest(BaseModel):
     token: str
 
+class PortalMessage(BaseModel):
+    message: str
+
+class PortalProviderRequest(BaseModel):
+    provider: str  # "copilot", "huggingchat", "chatgpt", "gemini", "zai"
+
 # --- Endpoints ---
 
 @router.get("/keys", response_model=List[APIKey])
@@ -286,9 +292,6 @@ async def get_portal_screenshot():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class PortalMessage(BaseModel):
-    message: str
-
 @router.post("/copilot/portal/send")
 async def send_portal_message(req: PortalMessage):
     """Send a message through the portal."""
@@ -438,5 +441,224 @@ async def portal_click_checkbox():
         }
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- NEW: Unified Browser Portal System for ALL Providers ---
+
+class UnifiedPortalAction(BaseModel):
+    provider: str  # "copilot", "huggingchat", "chatgpt", "gemini", "zai"
+    action: str    # "click", "type", "keypress", "scroll", "focus"
+    x: Optional[float] = None
+    y: Optional[float] = None
+    text: Optional[str] = None
+    key: Optional[str] = None
+    delta_x: Optional[int] = 0
+    delta_y: Optional[int] = 0
+
+@router.post("/portal/start")
+async def start_unified_portal(req: PortalProviderRequest):
+    """Start an interactive browser portal for any provider."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        provider = PortalProvider(req.provider.lower())
+        portal = get_portal_manager().get_portal(provider)
+        
+        if portal.is_running():
+            return {
+                "status": "already_running",
+                "provider": req.provider,
+                "message": f"{provider.value} portal is already running"
+            }
+        
+        await portal.initialize(headless=True)
+        
+        return {
+            "status": "success",
+            "provider": req.provider,
+            "message": f"{provider.value} portal started successfully",
+            "requires_login": portal.config.requires_login,
+            "url": portal.config.url
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/portal/{provider}/screenshot")
+async def get_unified_portal_screenshot(provider: str):
+    """Get screenshot from any provider portal."""
+    import os
+    from fastapi.responses import FileResponse
+    
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running. Start it first.")
+        
+        await portal.take_screenshot()
+        
+        if not os.path.exists(portal.screenshot_path):
+            raise HTTPException(status_code=404, detail="Screenshot not available")
+        
+        return FileResponse(portal.screenshot_path, media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/portal/action")
+async def unified_portal_action(req: UnifiedPortalAction):
+    """Perform an action on any provider portal."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        provider = PortalProvider(req.provider.lower())
+        portal = get_portal_manager().get_portal(provider)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{req.provider} portal not running. Start it first.")
+        
+        result = {}
+        
+        if req.action == "click":
+            if req.x is None or req.y is None:
+                raise HTTPException(status_code=400, detail="x and y coordinates required for click")
+            await portal.click(req.x, req.y)
+            result = {"message": f"Clicked at ({req.x}, {req.y})"}
+            
+        elif req.action == "type":
+            if not req.text:
+                raise HTTPException(status_code=400, detail="text required for type action")
+            await portal.type_text(req.text)
+            result = {"message": f"Typed: {req.text[:50]}..." if len(req.text) > 50 else f"Typed: {req.text}"}
+            
+        elif req.action == "keypress":
+            if not req.key:
+                raise HTTPException(status_code=400, detail="key required for keypress action")
+            await portal.key_press(req.key)
+            result = {"message": f"Pressed key: {req.key}"}
+            
+        elif req.action == "scroll":
+            await portal.scroll(req.delta_x or 0, req.delta_y or 0)
+            result = {"message": f"Scrolled by ({req.delta_x}, {req.delta_y})"}
+            
+        elif req.action == "focus":
+            if req.x is None or req.y is None:
+                raise HTTPException(status_code=400, detail="x and y coordinates required for focus")
+            await portal.focus_input(req.x, req.y)
+            result = {"message": f"Focused input at ({req.x}, {req.y})"}
+            
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")
+        
+        return {
+            "status": "success",
+            "provider": req.provider,
+            "action": req.action,
+            **result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/portal/{provider}/send")
+async def unified_portal_send_message(provider: str, req: PortalMessage):
+    """Send a message through any provider portal."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running. Start it first.")
+        
+        response = await portal.send_message(req.message)
+        
+        return {
+            "status": "success",
+            "provider": provider,
+            "response": response
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/portal/{provider}/newchat")
+async def unified_portal_new_chat(provider: str):
+    """Start new chat on any provider portal."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running. Start it first.")
+        
+        await portal.new_chat()
+        
+        return {
+            "status": "success",
+            "provider": provider,
+            "message": "New chat started"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/portal/{provider}/close")
+async def close_unified_portal(provider: str):
+    """Close any provider portal."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        await portal.close()
+        
+        return {
+            "status": "success",
+            "provider": provider,
+            "message": f"{provider} portal closed"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/portal/status")
+async def get_all_portal_status():
+    """Get status of all provider portals."""
+    try:
+        from browser_portal import get_portal_manager, PORTAL_CONFIGS
+        
+        manager = get_portal_manager()
+        active_portals = manager.get_active_portals()
+        
+        all_providers = []
+        for provider in PORTAL_CONFIGS.keys():
+            is_running = provider in active_portals
+            config = PORTAL_CONFIGS[provider]
+            all_providers.append({
+                "provider": provider.value,
+                "name": config.name,
+                "is_running": is_running,
+                "requires_login": config.requires_login,
+                "url": config.url
+            })
+        
+        return {
+            "providers": all_providers,
+            "active_count": len(active_portals)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
