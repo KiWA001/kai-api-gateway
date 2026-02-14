@@ -5,18 +5,18 @@
 ---
 
 ## 1. System Architecture
-The API uses a **Strict Engine** (`engine.py`) that routes requests to providers (`g4f`, `pollinations`).
+The API uses a **Strict Engine** (`engine.py`) that routes requests to providers (`g4f`, `pollinations`, `zai`, `gemini`, `huggingchat`).
 -   **Adaptive Fallback**: By default (`provider="auto"`), the engine tries models in `MODEL_RANKING` order.
 -   **Strict Mode**: If `model` or `provider` is specified, the engine tries **ONLY** that combination. No fallback.
 
 ## 2. Deployment
 
 ### A. Vercel (Serverless - Default)
-Fast, free, but NO browser support (**Z.ai disabled**).
+Fast, free, but NO browser support (**Z.ai, Gemini, HuggingChat disabled**).
 See `vercel.json` and hacks below.
 
-### B. Hugging Face Spaces (Docker - Z.ai Online)
-Use this for **Z.ai** (requires browser).
+### B. Hugging Face Spaces (Docker - Full Browser Support)
+Use this for **Z.ai, Gemini, HuggingChat** (requires browser).
 - See [README_DOCKER.md](file:///Users/mac/KAI_API/README_DOCKER.md)
 - Supports full browser automation.
 
@@ -34,6 +34,8 @@ if os.environ.get("VERCEL") or True:
     os.environ["HOME"] = "/tmp"
 ```
 **DO NOT REMOVE THIS.** It prevents `[Errno 30] Read-only file system` crashes.
+
+---
 
 ## 3. Provider Specifics
 
@@ -56,7 +58,7 @@ Uses Playwright Chromium to interact with `chat.z.ai` as a real browser.
 -   **Model**: `glm-5` (default, reasoning model), `glm-4-flash`.
 -   **Key Headers**: `x-fe-version: prod-fe-1.0.237`, `x-signature: <sha256>`, `Authorization: Bearer <JWT>`.
 -   **Speed**: ~5-15s per request (browser startup + DOM scraping).
--   **Vercel**: **DISABLED** (no Chromium in serverless). Local only.
+-   **Vercel**: **DISABLED** (no Chromium in serverless). Local/Docker only.
 -   **Files**: `providers/zai_provider.py`, `test_zai_browser.py`, `zai_captured.json`.
 
 ### D. Gemini (Browser-Based Provider)
@@ -71,18 +73,22 @@ Uses Playwright Chromium to interact with `gemini.google.com` as a real browser.
 ### E. HuggingChat (Browser-Based Provider)
 Uses Playwright Chromium to interact with `huggingface.co/chat` as a real browser.
 -   **Why Browser**: HuggingChat provides access to 100+ open-source models via web interface.
+-   **Authentication**: Uses credentials (stored in provider) - logs in automatically.
+-   **Session Management**: Uses Supabase to persist cookies across redeploys (see Section 7).
+-   **New Conversation Each Time**: Clicks "New Chat" to ensure no context sharing between API calls.
 -   **Input**: `textarea` with placeholder text.
 -   **Features**: 
     -   Handles the welcome modal automatically (clicks "Start chatting")
-    -   Supports model selection from dropdown (optional, defaults to "Omni" router)
-    -   Access to top models: Llama 3.3 70B, Qwen 2.5 72B, DeepSeek R1, etc.
--   **Models**: 
-    -   `omni` - Auto-routes to best model (default)
-    -   `meta-llama/Llama-3.3-70B-Instruct` - Meta's latest Llama model
-    -   `Qwen/Qwen2.5-72B-Instruct` - Alibaba's Qwen model
-    -   `deepseek-ai/DeepSeek-R1` - DeepSeek reasoning model
--   **Files**: `providers/huggingchat_provider.py`.
--   **Status**: **Experimental**. Requires local Playwright environment.
+    -   Supports model selection from dropdown
+    -   Access to top models: Llama 3.3 70B, Qwen 2.5 72B, DeepSeek R1, Kimi K2, etc.
+-   **Models** (all prefixed with `huggingface-`):
+    -   `huggingface-omni` - Auto-routes to best model (default)
+    -   `huggingface-llama-3.3-70b` - Meta's latest Llama model
+    -   `huggingface-qwen-72b` - Alibaba's Qwen model
+    -   `huggingface-deepseek-r1` - DeepSeek reasoning model
+    -   `huggingface-kimi-k2` - Moonshot's Kimi K2 model
+-   **Files**: `providers/huggingchat_provider.py`, `provider_sessions.py`.
+-   **Status**: **Working**. Requires local Playwright environment.
 -   **Vercel**: **DISABLED** (no Chromium in serverless). Local/Docker only.
 
 ### F. Search & Deep Research
@@ -94,10 +100,14 @@ The API includes a search engine (`search_engine.py`) powered by DuckDuckGo (via
     3.  Scrapes results.
     4.  Synthesizes a final answer using the AI Engine.
 
+---
+
 ## 4. Frontend & Admin
 -   **`static/docs.html`**: The public landing page AND the "Try It" dashboard.
 -   **`static/admin.html`**: Secret admin panel (`/qazmlp`) for checking stats and running tests.
 -   **Stats**: Stored in Supabase (persisted across Vercel cold starts).
+
+---
 
 ## 5. Debugging Tools
 We have built-in tools to diagnose issues on Vercel:
@@ -105,8 +115,80 @@ We have built-in tools to diagnose issues on Vercel:
     -   *Note*: Uses `AsyncClient` to avoid "Event loop already running" errors.
 -   **`/admin/test_all`**: Runs a parallel check on all configured models.
 -   **`debug_g4f_verbose.py`**: Local script for deep inspection.
+-   **`debug_huggingchat_visible.py`**: Launches visible browser to debug HuggingChat interactions.
 
-## 5. Maintenance Workflows
+---
+
+## 6. Response Sanitization
+The `sanitizer.py` module cleans AI responses by removing:
+-   **Promotional spam** (llmplayground.net, Pollinations ads, etc.)
+-   **UI Artifacts** ("Export to Sheets", "Copied", model names like "Kimi-K2-Instruct-0905 via groq")
+-   **JSON double-encoding** (some providers wrap responses in JSON)
+-   **Reasoning traces** (`<think>` tags from DeepSeek and similar)
+
+**When adding new providers**, check if they inject artifacts and add patterns to `SPAM_PATTERNS` in `sanitizer.py`.
+
+---
+
+## 7. Provider Session Management (Supabase)
+
+### Overview
+Browser-based providers (HuggingChat, Z.ai, Gemini) can save their authentication sessions to Supabase. This ensures:
+-   ✅ Sessions survive redeploys and restarts
+-   ✅ No repeated login emails
+-   ✅ Shared session state across multiple workers
+
+### Architecture
+-   **Table**: `provider_sessions` (see `supabase_sessions_schema.sql`)
+-   **Manager**: `provider_sessions.py` - `ProviderSessionManager` class
+-   **Key Fields**:
+    -   `provider`: Provider name (e.g., "huggingchat", "zai")
+    -   `session_data`: JSONB with cookies, tokens, etc.
+    -   `conversation_count`: Number of API calls made
+    -   `max_conversations`: Limit before requiring re-login (default 50)
+    -   `expires_at`: Session expiration timestamp
+
+### Usage in Providers
+```python
+from provider_sessions import get_provider_session_manager
+
+session_mgr = get_provider_session_manager()
+
+# Check if we need to login
+if session_mgr.needs_login("huggingchat"):
+    # Perform login
+    cookies = await perform_login()
+    # Save to Supabase
+    session_mgr.save_session("huggingchat", cookies, conversation_count=0)
+else:
+    # Use existing session
+    session = session_mgr.get_session("huggingchat")
+    cookies = session["session_data"]["cookies"]
+
+# After successful API call, increment counter
+session_mgr.increment_conversation("huggingchat")
+```
+
+### Setup
+1.  Run `supabase_sessions_schema.sql` in Supabase SQL Editor
+2.  Ensure `SUPABASE_URL` and `SUPABASE_KEY` are set in environment
+3.  Provider automatically uses Supabase for session persistence
+
+### Current Implementation Status
+-   **HuggingChat**: ✅ Uses Supabase sessions (saves cookies, 50 conversations per login)
+-   **Z.ai**: ❌ Not needed (auto-gets guest JWT each time)
+-   **Gemini**: ❌ Not needed (no authentication required)
+
+### Limits Per Provider
+| Provider | Max Conversations | Session Duration |
+|----------|------------------|------------------|
+| HuggingChat | 50 | 24 hours |
+| Z.ai | 100 | 48 hours |
+| Gemini | 100 | 48 hours |
+
+---
+
+## 8. Maintenance Workflows
 -   **Adding Models**: Run `@.agent/workflows/update.md`.
     -   *Crucial*: Always run `step 3.6` (Strict Mode Verification) after updates.
 -   **Strict Mode Validation**: Run `python3 test_strict.py`.
@@ -115,13 +197,51 @@ We have built-in tools to diagnose issues on Vercel:
         -   Previous blocker (x-signature) solved via Playwright browser automation.
         -   Provider: `providers/zai_provider.py`, Model: `glm-5` (Tier 1).
 
-## 6. Common Issues & Fixes
+---
+
+## 9. Common Issues & Fixes
 | Error | Cause | Fix |
 | :--- | :--- | :--- |
 | `[Errno 30] Read-only file system` | `HOME` not set to `/tmp` | Ensure `os.environ["HOME"] = "/tmp"` is at top of `main.py`. |
 | `Event loop already running` | Sync `Client` in async handler | Use `g4f.client.AsyncClient`. |
 | `Add a "api_key"` | Provider requires auth | The provider (e.g. OpenRouter) is active but we have no key. Use `strict` mode to avoid it, or rely on `ApiAirforce`. |
 | `Model not found: auto` | `model="auto"` passed | `engine.py` must handle `model="auto"` as `None`. |
+| HuggingChat login emails every request | Not using session management | Ensure `provider_sessions.py` is being used and Supabase table exists. |
+| "Start chatting" modal blocking | Welcome modal not dismissed | Provider should click the modal button before finding input. |
+| Response contains "Copied" or model names | Sanitization missing | Add UI artifact patterns to `sanitizer.py`. |
 
 ---
-**Last Updated**: 2026-02-12
+
+## 10. Tips & Tricks
+
+### Browser-Based Providers (Z.ai, Gemini, HuggingChat)
+1. **Always use headless mode on servers** - Visible browser doesn't work on Hugging Face
+2. **Handle modals** - Welcome screens block interaction, click them first
+3. **Wait for hydration** - JavaScript-heavy sites need 2-3 seconds after page load
+4. **Multiple selectors** - Try multiple input selectors (textarea, contenteditable, etc.)
+5. **Check for loading states** - Spinners/loading indicators mean content isn't ready
+6. **Use ephemeral contexts** - New context per request for isolation, but reuse cookies via Supabase
+
+### Model Naming
+-   **Always prefix with provider name** (e.g., `huggingface-`, `gemini-`, `zai-`)
+-   **Use kebab-case** (e.g., `llama-3.3-70b`, not `Llama_3.3_70b`)
+-   **Keep it short but descriptive** (e.g., `huggingface-kimi-k2` vs `moonshotai-Kimi-K2-Instruct`)
+
+### Adding New Providers
+1.  Create `providers/<name>_provider.py` inheriting from `BaseProvider`
+2.  Implement `send_message()`, `get_available_models()`, `is_available()`
+3.  Add models to `config.py` MODEL_RANKING and PROVIDER_MODELS
+4.  Import and register in `engine.py`
+5.  Add documentation to this guide (Section 3)
+6.  Test locally with debug script before deploying
+7.  Consider if session management (Supabase) is needed
+
+### Testing
+-   **Always test locally first** with `python3 test_<provider>_browser.py`
+-   **Use visible browser for debugging** (`headless=False`) to see what's happening
+-   **Take screenshots** at each step to diagnose issues
+-   **Check logs** on Hugging Face Spaces for errors
+
+---
+
+**Last Updated**: 2026-02-14
