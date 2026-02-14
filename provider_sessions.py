@@ -26,6 +26,7 @@ DEFAULT_MAX_CONVERSATIONS = {
     "huggingchat": 50,
     "zai": 100,
     "gemini": 100,
+    "copilot": 999999,  # Unlimited for Copilot
 }
 
 # Session duration per provider (hours)
@@ -33,6 +34,7 @@ DEFAULT_SESSION_DURATION = {
     "huggingchat": 24,
     "zai": 48,
     "gemini": 48,
+    "copilot": 720,  # 30 days for Copilot
 }
 
 

@@ -17,7 +17,7 @@ import re
 from typing import Optional, Dict, Any
 from providers.base import BaseProvider
 from config import PROVIDER_MODELS
-from copilot_session import CopilotSessionManager
+from provider_sessions import get_provider_session_manager
 
 logger = logging.getLogger("kai_api.copilot")
 
@@ -147,10 +147,10 @@ class CopilotProvider(BaseProvider):
 
         await self._ensure_browser()
         selected_model = model or "copilot-gpt-4"
-        session_mgr = CopilotSessionManager()
+        session_mgr = get_provider_session_manager()
 
-        # Check if we have a valid session
-        session_data = session_mgr.load_session()
+        # Check if we have a valid session from Supabase
+        session_data = session_mgr.get_session("copilot")
         
         # Create context with cookies if we have them
         context = await _browser.new_context(
@@ -265,11 +265,15 @@ class CopilotProvider(BaseProvider):
             if not response_text:
                 raise ValueError("Empty response from Copilot")
 
-            # Save cookies after successful request
+            # Save cookies after successful request to Supabase
             try:
                 cookies = await context.cookies()
-                session_mgr.save_cookies(cookies)
-                logger.info("✅ Copilot: Saved session cookies")
+                cookies_dict = [{k: v for k, v in cookie.items()} for cookie in cookies]
+                # Get current conversation count
+                session = session_mgr.get_session("copilot")
+                conv_count = session.get("conversation_count", 0) if session else 0
+                session_mgr.save_session("copilot", cookies_dict, conversation_count=conv_count + 1)
+                logger.info("✅ Copilot: Saved session cookies to Supabase")
             except Exception as e:
                 logger.warning(f"Failed to save cookies: {e}")
 
