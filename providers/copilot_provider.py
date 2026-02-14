@@ -28,6 +28,7 @@ _lock = asyncio.Lock()
 # Track if we're currently showing CAPTCHA
 _captcha_pending = False
 _captcha_context = None
+_captcha_page = None
 
 
 class CopilotProvider(BaseProvider):
@@ -83,26 +84,48 @@ class CopilotProvider(BaseProvider):
         Returns True if CAPTCHA detected, False otherwise.
         """
         try:
-            # Multiple CAPTCHA selectors
+            # Take a screenshot first for debugging
+            await page.screenshot(path="/tmp/copilot_debug.png")
+            
+            # Check page content for CAPTCHA indicators
+            page_content = await page.content()
+            page_text = await page.evaluate("() => document.body.innerText || ''")
+            
+            # Check for various CAPTCHA indicators
+            captcha_indicators = [
+                "captcha",
+                "verify you",
+                "i'm not a robot",
+                "security check",
+                "challenge",
+                "prove you're human",
+                "human verification",
+            ]
+            
+            content_lower = (page_content + page_text).lower()
+            for indicator in captcha_indicators:
+                if indicator in content_lower:
+                    logger.warning(f"🤖 Copilot: CAPTCHA detected (indicator: '{indicator}')!")
+                    return True
+            
+            # Also check for specific selectors
             captcha_selectors = [
-                '[data-testid="captcha-challenge"]',
-                'iframe[src*="captcha"]',
-                'input[id*="captcha"]',
+                'iframe[src*="captcha"]', 
+                'iframe[src*="challenge"]',
                 '.captcha-container',
-                '[class*="captcha"]',
-                'text="Verify you"',
-                'text="I\'m not a robot"',
-                'text="Security check"',
                 '#challenge-form',
-                '.challenge-container',
+                '[class*="captcha"]',
+                '[id*="captcha"]',
             ]
             
             for selector in captcha_selectors:
                 try:
-                    element = await page.wait_for_selector(selector, timeout=3000)
-                    if element and await element.is_visible():
-                        logger.warning("🤖 Copilot: CAPTCHA detected!")
-                        return True
+                    element = await page.query_selector(selector)
+                    if element:
+                        is_visible = await element.is_visible()
+                        if is_visible:
+                            logger.warning(f"🤖 Copilot: CAPTCHA detected (selector: '{selector}')!")
+                            return True
                 except:
                     continue
             
@@ -146,8 +169,11 @@ class CopilotProvider(BaseProvider):
 
         # Add cookies if we have them
         if session_data and session_data.get("cookies"):
-            await context.add_cookies(session_data["cookies"])
-            logger.info("✅ Copilot: Loaded existing session cookies")
+            try:
+                await context.add_cookies(session_data["cookies"])
+                logger.info("✅ Copilot: Loaded existing session cookies")
+            except Exception as e:
+                logger.warning(f"Failed to load cookies: {e}")
 
         page = await context.new_page()
 
@@ -155,8 +181,13 @@ class CopilotProvider(BaseProvider):
             logger.info(f"Copilot request: {selected_model}")
 
             # Navigate to Copilot
+            logger.info("Copilot: Navigating to copilot.microsoft.com...")
             await page.goto("https://copilot.microsoft.com/", timeout=60000)
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)  # Wait longer for page to fully load
+            
+            # Take initial screenshot for debugging
+            await page.screenshot(path="/tmp/copilot_initial.png")
+            logger.info("Copilot: Initial screenshot saved")
 
             # Check for CAPTCHA
             has_captcha = await self._check_and_handle_captcha(page)
@@ -165,13 +196,15 @@ class CopilotProvider(BaseProvider):
                 logger.warning("🤖 Copilot: CAPTCHA challenge detected!")
                 
                 # Save current state for CAPTCHA solving
-                global _captcha_pending, _captcha_context
+                global _captcha_pending, _captcha_context, _captcha_page
                 _captcha_pending = True
                 _captcha_context = context
+                _captcha_page = page
                 
                 # Take screenshot for admin dashboard
                 screenshot_path = "/tmp/copilot_captcha.png"
                 await page.screenshot(path=screenshot_path, full_page=True)
+                logger.info(f"CAPTCHA screenshot saved to {screenshot_path}")
                 
                 raise Exception("CAPTCHA_REQUIRED")
 
@@ -192,19 +225,24 @@ class CopilotProvider(BaseProvider):
                 '[role="textbox"]',
                 'textarea',
                 '.input-area div[contenteditable]',
+                '[placeholder*="Ask"]',
+                '[placeholder*="Message"]',
             ]
 
             input_selector = None
             for sel in input_selectors:
                 try:
-                    await page.wait_for_selector(sel, timeout=5000)
-                    input_selector = sel
-                    logger.info(f"✅ Copilot: Found input selector: {sel}")
-                    break
+                    el = await page.wait_for_selector(sel, timeout=5000)
+                    if el:
+                        input_selector = sel
+                        logger.info(f"✅ Copilot: Found input selector: {sel}")
+                        break
                 except:
                     continue
 
             if not input_selector:
+                # Save screenshot for debugging
+                await page.screenshot(path="/tmp/copilot_no_input.png")
                 raise RuntimeError("Could not find Copilot chat input")
 
             await asyncio.sleep(self.HYDRATION_DELAY)
@@ -219,7 +257,7 @@ class CopilotProvider(BaseProvider):
             await asyncio.sleep(0.5)
             await page.keyboard.press("Enter")
 
-            logger.info("Copilot: Message sent...")
+            logger.info("Copilot: Message sent, waiting for response...")
 
             # Wait for response
             response_text = await self._wait_for_response(page)
@@ -228,9 +266,15 @@ class CopilotProvider(BaseProvider):
                 raise ValueError("Empty response from Copilot")
 
             # Save cookies after successful request
-            cookies = await context.cookies()
-            session_mgr.save_cookies(cookies)
-            logger.info("✅ Copilot: Saved session cookies")
+            try:
+                cookies = await context.cookies()
+                session_mgr.save_cookies(cookies)
+                logger.info("✅ Copilot: Saved session cookies")
+            except Exception as e:
+                logger.warning(f"Failed to save cookies: {e}")
+
+            # Close context
+            await context.close()
 
             return {
                 "response": response_text,
@@ -240,11 +284,13 @@ class CopilotProvider(BaseProvider):
         except Exception as e:
             if "CAPTCHA_REQUIRED" in str(e):
                 raise
+            # Save error screenshot
+            try:
+                await page.screenshot(path="/tmp/copilot_error.png")
+            except:
+                pass
             logger.error(f"Copilot Error: {e}")
             raise
-        finally:
-            if not _captcha_pending:  # Only close if no CAPTCHA pending
-                await context.close()
 
     async def _wait_for_response(self, page) -> str:
         """Wait for and extract the AI response from the DOM."""
@@ -266,6 +312,8 @@ class CopilotProvider(BaseProvider):
                         '[class*="response"]',
                         '[class*="message"] div',
                         '.markdown-body',
+                        'article',
+                        '[class*="conversation"] > div:last-child',
                     ];
                     
                     for (const sel of selectors) {
@@ -326,8 +374,15 @@ class CopilotProvider(BaseProvider):
         return _captcha_context
 
     @staticmethod
+    def get_captcha_page():
+        """Get the page with pending CAPTCHA."""
+        global _captcha_page
+        return _captcha_page
+
+    @staticmethod
     def clear_captcha_pending():
         """Clear the CAPTCHA pending state."""
-        global _captcha_pending, _captcha_context
+        global _captcha_pending, _captcha_context, _captcha_page
         _captcha_pending = False
         _captcha_context = None
+        _captcha_page = None
