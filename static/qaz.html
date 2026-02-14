@@ -521,6 +521,112 @@
                 lookupToken();
             }
         });
+        
+        // Copilot CAPTCHA handling
+        async function checkCopilotCaptchaStatus() {
+            try {
+                const res = await fetch('/qaz/copilot/captcha/status');
+                const data = await res.json();
+                
+                if (data.captcha_required) {
+                    document.getElementById('copilot-captcha-section').style.display = 'block';
+                    document.getElementById('copilot-captcha-img').src = data.screenshot_url + '?t=' + new Date().getTime();
+                } else {
+                    document.getElementById('copilot-captcha-section').style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Failed to check Copilot CAPTCHA status:', e);
+            }
+        }
+        
+        async function markCaptchaSolved() {
+            try {
+                const res = await fetch('/qaz/copilot/captcha/solved', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                document.getElementById('copilot-captcha-section').style.display = 'none';
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        async function clearCaptchaState() {
+            if (!confirm('Clear CAPTCHA state and retry?')) return;
+            try {
+                const res = await fetch('/qaz/copilot/captcha/clear', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                document.getElementById('copilot-captcha-section').style.display = 'none';
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // Check CAPTCHA status periodically
+        checkCopilotCaptchaStatus();
+        setInterval(checkCopilotCaptchaStatus, 10000);
+    </script>
+    
+    <!-- Copilot CAPTCHA Section -->
+    <div id="copilot-captcha-section" class="card" style="margin-top: 30px; display: none; border: 2px solid var(--warning);">
+        <h2 style="color: var(--warning); margin-bottom: 15px;">⚠️ Copilot CAPTCHA Required</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+            Microsoft Copilot is requesting a CAPTCHA verification. Please solve it below, then click "I've Solved It".
+        </p>
+        
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <img id="copilot-captcha-img" src="" alt="CAPTCHA Screenshot" style="max-width: 100%; border-radius: 4px; display: block; margin: 0 auto;">
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button onclick="markCaptchaSolved()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                ✅ I've Solved It
+            </button>
+            <button onclick="checkCopilotCaptchaStatus()" style="background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                🔄 Refresh Screenshot
+            </button>
+            <button onclick="clearCaptchaState()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                🗑️ Clear & Retry
+            </button>
+        </div>
+    </div>
+    
+    <!-- Copilot Session Status -->
+    <div class="card" style="margin-top: 30px;">
+        <h2 style="margin-bottom: 15px;">Copilot Session Status</h2>
+        <div id="copilot-session-info" style="color: var(--text-muted);">
+            <button onclick="checkCopilotSession()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Check Status</button>
+        </div>
+    </div>
+    
+    <script>
+        async function checkCopilotSession() {
+            try {
+                const res = await fetch('/qaz/copilot/session/status');
+                const data = await res.json();
+                
+                const infoDiv = document.getElementById('copilot-session-info');
+                if (data.has_session) {
+                    infoDiv.innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div><strong>Status:</strong> <span style="color: var(--success);">✅ Active</span></div>
+                            <div><strong>Cookies:</strong> ${data.cookie_count}</div>
+                            <div><strong>Days Remaining:</strong> ${data.days_remaining}</div>
+                            <div><strong>Expires:</strong> ${new Date(data.expires_at).toLocaleDateString()}</div>
+                        </div>
+                        <button onclick="checkCopilotSession()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 15px;">Refresh</button>
+                    `;
+                } else {
+                    infoDiv.innerHTML = `
+                        <div><strong>Status:</strong> <span style="color: var(--error);">❌ No Active Session</span></div>
+                        <p style="margin-top: 10px; font-size: 13px;">${data.message}</p>
+                        <button onclick="checkCopilotSession()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 10px;">Refresh</button>
+                    `;
+                }
+            } catch (e) {
+                document.getElementById('copilot-session-info').innerHTML = '<span style="color: var(--error);">Error checking status</span>';
+            }
+        }
     </script>
 </body>
 

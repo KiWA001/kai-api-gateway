@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import secrets
 import uuid
+import asyncio
 
 from db import get_supabase
 
@@ -131,3 +132,111 @@ async def lookup_key_by_token(req: LookupKeyRequest):
         elif hasattr(e, 'args') and len(e.args) > 0:
             error_msg = str(e.args[0])
         raise HTTPException(status_code=500, detail=error_msg)
+
+# --- Copilot CAPTCHA Handling ---
+
+@router.get("/copilot/captcha/status")
+async def copilot_captcha_status():
+    """Check if Copilot has a pending CAPTCHA challenge."""
+    try:
+        from providers.copilot_provider import CopilotProvider
+        
+        is_pending = CopilotProvider.is_captcha_pending()
+        
+        if is_pending:
+            # Check if screenshot exists
+            import os
+            screenshot_path = "/tmp/copilot_captcha.png"
+            has_screenshot = os.path.exists(screenshot_path)
+            
+            return {
+                "captcha_required": True,
+                "has_screenshot": has_screenshot,
+                "screenshot_url": "/qaz/copilot/captcha/screenshot" if has_screenshot else None,
+                "message": "CAPTCHA verification required. Please solve it in the admin panel."
+            }
+        else:
+            return {
+                "captcha_required": False,
+                "message": "No CAPTCHA pending"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/copilot/captcha/screenshot")
+async def copilot_captcha_screenshot():
+    """Get the CAPTCHA screenshot for solving."""
+    import os
+    from fastapi.responses import FileResponse
+    
+    screenshot_path = "/tmp/copilot_captcha.png"
+    
+    if not os.path.exists(screenshot_path):
+        raise HTTPException(status_code=404, detail="No CAPTCHA screenshot available")
+    
+    return FileResponse(screenshot_path, media_type="image/png")
+
+@router.post("/copilot/captcha/solved")
+async def copilot_captcha_solved():
+    """Mark CAPTCHA as solved and save session."""
+    try:
+        from providers.copilot_provider import CopilotProvider
+        from copilot_session import CopilotSessionManager
+        
+        # Get the context with CAPTCHA
+        context = CopilotProvider.get_captcha_context()
+        
+        if not context:
+            raise HTTPException(status_code=400, detail="No CAPTCHA context found")
+        
+        # Wait a bit for user to solve
+        await asyncio.sleep(2)
+        
+        # Save cookies from the solved session
+        cookies = await context.cookies()
+        session_mgr = CopilotSessionManager()
+        session_mgr.save_cookies(cookies)
+        
+        # Clear the pending state
+        CopilotProvider.clear_captcha_pending()
+        
+        # Close the context
+        await context.close()
+        
+        return {
+            "status": "success",
+            "message": "CAPTCHA solved and session saved"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/copilot/captcha/clear")
+async def copilot_captcha_clear():
+    """Clear the CAPTCHA pending state (for retry)."""
+    try:
+        from providers.copilot_provider import CopilotProvider
+        
+        # Get context and close it
+        context = CopilotProvider.get_captcha_context()
+        if context:
+            await context.close()
+        
+        CopilotProvider.clear_captcha_pending()
+        
+        return {
+            "status": "success",
+            "message": "CAPTCHA state cleared"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/copilot/session/status")
+async def copilot_session_status():
+    """Check Copilot session status."""
+    try:
+        from copilot_session import CopilotSessionManager
+        
+        session_info = CopilotSessionManager.get_session_info()
+        return session_info
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

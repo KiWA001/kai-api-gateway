@@ -20,7 +20,10 @@ MODEL_RANKING = [
     ("zai-glm-5", "zai", "glm-5"),
     ("gemini-gemini-3-flash", "gemini", "gemini-3-flash"),
     
-    # Tier 2 — HuggingChat Models (Top 20 by popularity/quality)
+    # Tier 2 — Copilot (GPT-4 via Microsoft)
+    ("copilot-gpt-4", "copilot", "copilot-gpt-4"),
+    
+    # Tier 3 — HuggingChat Models (Top 20 by popularity/quality)
     ("huggingchat-omni", "huggingchat", "omni"),
     ("huggingchat-llama-3.3-70b", "huggingchat", "meta-llama/Llama-3.3-70B-Instruct"),
     ("huggingchat-llama-4-scout", "huggingchat", "meta-llama/Llama-4-Scout-17B-16E-Instruct"),
@@ -177,6 +180,9 @@ PROVIDER_MODELS = {
     ],
     "gemini": [
         "gemini-gemini-3-flash",
+    ],
+    "copilot": [
+        "copilot-gpt-4",
     ],
     "huggingchat": [
         # Top Tier
