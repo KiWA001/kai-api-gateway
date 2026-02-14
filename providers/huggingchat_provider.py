@@ -4,8 +4,8 @@ HuggingChat Provider (Browser-Based)
 Uses Playwright Chromium to interact with https://huggingface.co/chat as a real browser.
 
 Strategy:
-- Handles login with provided credentials
-- Saves session cookies for reuse
+- Reuses login sessions (saves cookies) - only login every 50 conversations
+- Starts a new conversation for each API call (no context sharing)
 - Supports model selection via the model dropdown
 - Scrapes AI response from the DOM
 """
@@ -15,6 +15,7 @@ import logging
 import re
 from providers.base import BaseProvider
 from config import PROVIDER_MODELS
+from huggingchat_session import get_session_manager
 
 logger = logging.getLogger("kai_api.huggingchat")
 
@@ -72,54 +73,82 @@ class HuggingChatProvider(BaseProvider):
             )
             logger.info("✅ HuggingChat: Browser is Ready.")
 
-    async def _login(self, context) -> bool:
+    async def _perform_login(self, context) -> bool:
         """
-        Perform login to Hugging Face.
+        Perform fresh login to Hugging Face and save cookies.
         Returns True if login successful.
         """
         page = await context.new_page()
+        session_mgr = get_session_manager()
         
         try:
-            logger.info("HuggingChat: Navigating to login page...")
+            logger.info("HuggingChat: Performing fresh login...")
             await page.goto("https://huggingface.co/login", timeout=60000)
             
             # Wait for login form
             await page.wait_for_selector('input[name="username"]', timeout=10000)
             
-            logger.info("HuggingChat: Filling login credentials...")
-            
-            # Fill username/email
+            # Fill credentials
             await page.fill('input[name="username"]', HF_USERNAME)
             await asyncio.sleep(0.5)
-            
-            # Fill password
             await page.fill('input[name="password"]', HF_PASSWORD)
             await asyncio.sleep(0.5)
             
-            # Click login button
+            # Click login
             await page.click('button[type="submit"]')
             
-            # Wait for navigation after login
+            # Wait for navigation
             try:
-                await page.wait_for_url("https://huggingface.co/", timeout=10000)
-                logger.info("✅ HuggingChat: Login successful!")
-                await page.close()
-                return True
+                await page.wait_for_url(lambda url: "login" not in url, timeout=15000)
             except:
-                # Check if we're still on login page (login failed)
                 current_url = page.url
                 if "login" in current_url:
-                    logger.error("❌ HuggingChat: Login failed - still on login page")
-                    await page.close()
+                    logger.error("❌ HuggingChat: Login failed")
                     return False
-                else:
-                    logger.info("✅ HuggingChat: Login successful (redirected)")
-                    await page.close()
-                    return True
-                    
+            
+            # Save cookies to session manager
+            cookies = await context.cookies()
+            session_mgr.set_cookies(cookies)
+            session_mgr.save_session()
+            
+            logger.info("✅ HuggingChat: Login successful, session saved")
+            await page.close()
+            return True
+            
         except Exception as e:
             logger.error(f"❌ HuggingChat: Login error: {e}")
             await page.close()
+            return False
+
+    async def _start_new_chat(self, page):
+        """Click 'New Chat' button to start a fresh conversation."""
+        try:
+            # Try multiple selectors for new chat button
+            new_chat_selectors = [
+                'a:has-text("New Chat")',
+                'button:has-text("New Chat")',
+                '[href="/chat/"]',  # Direct link to /chat
+            ]
+            
+            for selector in new_chat_selectors:
+                try:
+                    btn = await page.wait_for_selector(selector, timeout=3000)
+                    if btn:
+                        await btn.click()
+                        logger.info("HuggingChat: Started new conversation")
+                        await asyncio.sleep(1.5)  # Wait for new chat to load
+                        return True
+                except:
+                    continue
+            
+            # If button not found, navigate directly to /chat
+            logger.info("HuggingChat: Navigating to /chat for new conversation")
+            await page.goto("https://huggingface.co/chat", timeout=30000)
+            await asyncio.sleep(2)
+            return True
+            
+        except Exception as e:
+            logger.warning(f"HuggingChat: Could not start new chat: {e}")
             return False
 
     async def send_message(
@@ -135,8 +164,9 @@ class HuggingChatProvider(BaseProvider):
 
         await self._ensure_browser()
         selected_model = model or "huggingface-omni"
+        session_mgr = get_session_manager()
 
-        # Create persistent context (for session/cookies)
+        # Create context with cookies if we have them
         context = await _browser.new_context(
             viewport={"width": 1920, "height": 1080},
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -150,11 +180,19 @@ class HuggingChatProvider(BaseProvider):
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
         """)
 
-        # Try to login first
-        login_success = await self._login(context)
-        if not login_success:
-            await context.close()
-            raise RuntimeError("Failed to login to Hugging Face. Check credentials.")
+        # Check if we need to login
+        if session_mgr.needs_login():
+            logger.info("HuggingChat: Session needs login")
+            login_success = await self._perform_login(context)
+            if not login_success:
+                await context.close()
+                raise RuntimeError("Failed to login to Hugging Face")
+        else:
+            # Use existing cookies
+            cookies = session_mgr.get_cookies()
+            if cookies:
+                await context.add_cookies(cookies)
+                logger.info(f"HuggingChat: Using existing session (conversation #{session_mgr._conversation_count + 1})")
 
         page = await context.new_page()
 
@@ -163,43 +201,50 @@ class HuggingChatProvider(BaseProvider):
 
             # Navigate to HuggingChat
             await page.goto("https://huggingface.co/chat", timeout=60000)
+            await asyncio.sleep(2)
             
-            # Wait for page to load
-            await asyncio.sleep(3)
-            
-            # Handle welcome modal if present
+            # Handle welcome modal if present (first time only)
             try:
                 start_btn = await page.wait_for_selector(
                     'button:has-text("Start chatting")', 
-                    timeout=5000
+                    timeout=3000
                 )
                 if start_btn:
                     logger.info("HuggingChat: Dismissing welcome modal...")
                     await start_btn.click()
                     await asyncio.sleep(2)
-                    logger.info("HuggingChat: Welcome modal dismissed")
             except:
-                logger.info("HuggingChat: No welcome modal found")
+                pass
             
-            # Wait for chat interface to fully load
-            await asyncio.sleep(2)
+            # Start a new conversation (don't share context with previous messages)
+            await self._start_new_chat(page)
+            
+            # Handle welcome modal again if it appears after new chat
+            try:
+                start_btn = await page.wait_for_selector(
+                    'button:has-text("Start chatting")', 
+                    timeout=3000
+                )
+                if start_btn:
+                    await start_btn.click()
+                    await asyncio.sleep(2)
+            except:
+                pass
 
             # If specific model requested (not omni), try to select it
             if selected_model and selected_model != "huggingface-omni":
-                # Extract actual model name from prefixed name
                 actual_model = selected_model.replace("huggingface-", "")
                 await self._select_model(page, actual_model)
 
             await asyncio.sleep(self.HYDRATION_DELAY)
 
-            # Find and use the chat input - try multiple strategies
+            # Find and use the chat input
             input_selector = None
             input_selectors = [
                 'textarea[placeholder*="Ask"]',
                 'textarea[placeholder*="Message"]',
                 'textarea',
                 '[contenteditable="true"]',
-                'input[type="text"]',
             ]
             
             for sel in input_selectors:
@@ -215,15 +260,13 @@ class HuggingChatProvider(BaseProvider):
             if not input_selector:
                 raise RuntimeError("Could not find chat input field")
 
-            # Type the message
+            # Type and send message
             full_prompt = prompt
             if system_prompt:
                 full_prompt = f"[System: {system_prompt}]\n\n{prompt}"
 
             await page.fill(input_selector, full_prompt)
             await asyncio.sleep(0.5)
-            
-            # Press Enter to send
             await page.keyboard.press("Enter")
             logger.info("HuggingChat: Message sent...")
 
@@ -233,6 +276,13 @@ class HuggingChatProvider(BaseProvider):
             if not response_text:
                 raise ValueError("Empty response from HuggingChat")
 
+            # Save updated cookies and increment conversation count
+            cookies = await context.cookies()
+            session_mgr.set_cookies(cookies)
+            session_mgr.increment_conversation()
+            
+            logger.info(f"HuggingChat: Conversation complete (total: {session_mgr._conversation_count})")
+
             return {
                 "response": response_text,
                 "model": selected_model,
@@ -240,6 +290,9 @@ class HuggingChatProvider(BaseProvider):
 
         except Exception as e:
             logger.error(f"HuggingChat Error: {e}")
+            # If error might be session-related, clear it
+            if "login" in str(e).lower() or "auth" in str(e).lower():
+                session_mgr.clear_session()
             raise
         finally:
             await context.close()
@@ -247,7 +300,6 @@ class HuggingChatProvider(BaseProvider):
     async def _select_model(self, page, model: str):
         """Try to select a specific model from the dropdown."""
         try:
-            # Click the model selector button
             model_btn = await page.wait_for_selector(
                 'button:has-text("Models")', 
                 timeout=5000
@@ -256,19 +308,14 @@ class HuggingChatProvider(BaseProvider):
                 await model_btn.click()
                 await asyncio.sleep(1)
                 
-                # Try to find and click the specific model
-                # Model names in HuggingChat are full paths like "meta-llama/Llama-3.3-70B-Instruct"
-                model_option = await page.query_selector(
-                    f'text={model}'
-                )
+                model_option = await page.query_selector(f'text={model}')
                 if model_option:
                     await model_option.click()
                     logger.info(f"HuggingChat: Selected model {model}")
                     await asyncio.sleep(1)
                 else:
-                    # Close dropdown if model not found
                     await page.keyboard.press("Escape")
-                    logger.warning(f"HuggingChat: Model {model} not found, using default")
+                    logger.warning(f"HuggingChat: Model {model} not found")
         except Exception as e:
             logger.warning(f"HuggingChat: Could not select model: {e}")
 
@@ -281,7 +328,7 @@ class HuggingChatProvider(BaseProvider):
         for i in range(self.RESPONSE_TIMEOUT * 2):
             await asyncio.sleep(0.5)
 
-            # Check for loading/spinner and skip
+            # Check for loading/spinner
             is_loading = await page.evaluate("""
                 () => {
                     const spinners = document.querySelectorAll('[class*="loading"], [class*="spinner"], .animate-pulse');
@@ -295,7 +342,6 @@ class HuggingChatProvider(BaseProvider):
             # Extract response text
             current_text = await page.evaluate("""
                 () => {
-                    // Look for the last assistant message
                     const selectors = [
                         '[data-message-role="assistant"]',
                         '.assistant-message',
@@ -303,7 +349,6 @@ class HuggingChatProvider(BaseProvider):
                         'article',
                         '.markdown-body',
                         '[class*="message-content"]',
-                        '.chat-message:last-child .content',
                     ];
                     
                     for (const sel of selectors) {
@@ -321,7 +366,6 @@ class HuggingChatProvider(BaseProvider):
             if not current_text:
                 continue
 
-            # Clean the text
             clean = self._clean_response(current_text)
 
             if clean == last_text and len(clean) > 0:
@@ -344,8 +388,5 @@ class HuggingChatProvider(BaseProvider):
     def _clean_response(self, text: str) -> str:
         """Clean up HuggingChat response text."""
         clean = text.strip()
-        
-        # Remove common artifacts
         clean = re.sub(r"\n+\s*\n+", "\n\n", clean)
-        
         return clean.strip()
