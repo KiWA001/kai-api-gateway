@@ -2,7 +2,7 @@
 Free Proxy Manager for Browser Portals
 --------------------------------------
 Fetches and manages free proxy servers for ChatGPT and Copilot.
-Automatically tests proxies to ensure they're active.
+Automatically tests proxies and keeps ONLY working ones.
 """
 
 import asyncio
@@ -11,7 +11,7 @@ import random
 import logging
 from typing import Optional, List, Dict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 
 logger = logging.getLogger("kai_api.proxy_manager")
 
@@ -24,7 +24,7 @@ class Proxy:
     protocol: str = "http"
     last_tested: Optional[datetime] = None
     is_working: bool = False
-    response_time: float = 0.0
+    response_time: float = 999.0
     
     def __str__(self):
         return f"{self.protocol}://{self.ip}:{self.port}"
@@ -34,175 +34,224 @@ class Proxy:
         return {
             "server": f"{self.protocol}://{self.ip}:{self.port}",
         }
+    
+    def __hash__(self):
+        return hash((self.ip, self.port))
+    
+    def __eq__(self, other):
+        if isinstance(other, Proxy):
+            return self.ip == other.ip and self.port == other.port
+        return False
 
 
 class FreeProxyManager:
-    """Manages free proxy servers for browser portals."""
+    """Manages free proxy servers - keeps ONLY working ones."""
     
     def __init__(self):
-        self.proxies: List[Proxy] = []
+        self.working_proxies: List[Proxy] = []  # ONLY working proxies stored here
+        self.current_proxy_index: int = 0
         self.current_proxy: Optional[Proxy] = None
-        self.proxy_history: List[Proxy] = []
-        self.max_history = 10
         
-    async def fetch_proxies(self, limit: int = 20) -> List[Proxy]:
-        """Fetch free proxies from multiple sources."""
+    async def fetch_and_filter_proxies(self, max_test: int = 20) -> List[Proxy]:
+        """
+        Fetch proxies and test them, keeping ONLY working ones.
+        Returns list of verified working proxies.
+        """
+        logger.info("🔍 Fetching fresh proxies...")
+        
+        # Fetch from multiple sources
+        all_proxies = await self._fetch_from_sources()
+        
+        if not all_proxies:
+            logger.error("❌ No proxies fetched from any source")
+            return []
+        
+        logger.info(f"📊 Fetched {len(all_proxies)} total proxies, testing up to {max_test}...")
+        
+        # Shuffle for variety
+        random.shuffle(all_proxies)
+        
+        # Test proxies and collect working ones
+        working = []
+        tested = 0
+        
+        for proxy in all_proxies:
+            if tested >= max_test:
+                break
+                
+            tested += 1
+            logger.info(f"🧪 Testing proxy {tested}/{max_test}: {proxy.ip}:{proxy.port}")
+            
+            if await self._test_proxy_quick(proxy):
+                working.append(proxy)
+                logger.info(f"✅ WORKING! ({proxy.response_time:.2f}s) - Total working: {len(working)}")
+                
+                # Stop once we have enough working proxies
+                if len(working) >= 5:
+                    logger.info("✨ Found 5 working proxies, stopping tests")
+                    break
+            else:
+                logger.debug(f"❌ Dead proxy: {proxy.ip}:{proxy.port}")
+        
+        # REPLACE the list with ONLY working proxies
+        self.working_proxies = working
+        self.current_proxy_index = 0
+        
+        if working:
+            self.current_proxy = working[0]
+            logger.info(f"🎯 Kept {len(working)} WORKING proxies out of {tested} tested")
+        else:
+            self.current_proxy = None
+            logger.warning("⚠️ No working proxies found!")
+        
+        return working
+    
+    async def _fetch_from_sources(self) -> List[Proxy]:
+        """Fetch proxies from multiple free sources."""
         proxies = []
         
-        # Source 1: proxylist.geonode.com
+        # Source 1: Free proxy list (HTTP)
         try:
-            url = f"https://proxylist.geonode.com/api/proxy-list?limit={limit}&page=1&sort_by=lastChecked&sort_type=desc&protocols=http%2Chttps"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=10) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        for item in data.get('data', []):
-                            proxy = Proxy(
-                                ip=item['ip'],
-                                port=int(item['port']),
-                                country=item.get('country', 'Unknown'),
-                                protocol=item.get('protocols', ['http'])[0] if isinstance(item.get('protocols'), list) else 'http'
-                            )
-                            proxies.append(proxy)
-                            logger.info(f"Fetched proxy: {proxy}")
-        except Exception as e:
-            logger.warning(f"Failed to fetch from geonode: {e}")
-        
-        # Source 2: proxy-list.download
-        try:
-            url = "https://www.proxy-list.download/api/v1/get?type=http"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=10) as response:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+                async with session.get(
+                    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
+                ) as response:
                     if response.status == 200:
                         text = await response.text()
                         lines = text.strip().split('\n')
-                        for line in lines[:limit]:
+                        for line in lines[:100]:  # Limit to first 100
                             if ':' in line:
-                                ip, port = line.strip().split(':')
+                                parts = line.strip().split(':')
+                                if len(parts) >= 2:
+                                    try:
+                                        proxy = Proxy(
+                                            ip=parts[0],
+                                            port=int(parts[1]),
+                                            country='Unknown',
+                                            protocol='http'
+                                        )
+                                        proxies.append(proxy)
+                                    except:
+                                        pass
+                        logger.info(f"✅ Source 1: Got {len(proxies)} proxies")
+        except Exception as e:
+            logger.warning(f"❌ Source 1 failed: {e}")
+        
+        # Source 2: Alternative proxy list
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+                async with session.get(
+                    "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt"
+                ) as response:
+                    if response.status == 200:
+                        text = await response.text()
+                        lines = text.strip().split('\n')
+                        new_count = 0
+                        for line in lines[:100]:
+                            if ':' in line:
+                                parts = line.strip().split(':')
+                                if len(parts) >= 2:
+                                    try:
+                                        proxy = Proxy(
+                                            ip=parts[0],
+                                            port=int(parts[1]),
+                                            country='Unknown',
+                                            protocol='http'
+                                        )
+                                        if proxy not in proxies:
+                                            proxies.append(proxy)
+                                            new_count += 1
+                                    except:
+                                        pass
+                        logger.info(f"✅ Source 2: Got {new_count} new proxies")
+        except Exception as e:
+            logger.warning(f"❌ Source 2 failed: {e}")
+        
+        # Source 3:geonode free proxies API
+        try:
+            url = "https://proxylist.geonode.com/api/proxy-list?limit=100&page=1&sort_by=lastChecked&sort_type=desc&protocols=http"
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        new_count = 0
+                        for item in data.get('data', []):
+                            try:
                                 proxy = Proxy(
-                                    ip=ip,
-                                    port=int(port),
-                                    country='Unknown',
+                                    ip=item['ip'],
+                                    port=int(item['port']),
+                                    country=item.get('country', 'Unknown'),
                                     protocol='http'
                                 )
                                 if proxy not in proxies:
                                     proxies.append(proxy)
+                                    new_count += 1
+                            except:
+                                pass
+                        logger.info(f"✅ Source 3: Got {new_count} new proxies")
         except Exception as e:
-            logger.warning(f"Failed to fetch from proxy-list: {e}")
+            logger.warning(f"❌ Source 3 failed: {e}")
         
-        # Source 3: free-proxy-list.net (simple API)
-        try:
-            # This is a fallback - scrape a few common free proxies
-            fallback_proxies = [
-                ("20.235.104.105", 3128, "US"),
-                ("159.89.49.172", 3128, "US"),
-                ("20.210.113.32", 8123, "US"),
-                ("103.152.232.142", 8080, "ID"),
-                ("43.135.166.179", 8080, "SG"),
-                ("47.74.152.190", 8888, "JP"),
-                ("52.196.1.179", 8080, "JP"),
-                ("13.231.21.152", 3128, "JP"),
-                ("54.179.34.32", 3128, "SG"),
-                ("18.141.176.104", 3128, "SG"),
-            ]
-            
-            for ip, port, country in fallback_proxies:
-                proxy = Proxy(ip=ip, port=port, country=country, protocol='http')
-                if proxy not in proxies:
-                    proxies.append(proxy)
-                    
-        except Exception as e:
-            logger.warning(f"Fallback proxy error: {e}")
+        # Remove duplicates
+        unique_proxies = list({(p.ip, p.port): p for p in proxies}.values())
+        logger.info(f"📦 Total unique proxies: {len(unique_proxies)}")
         
-        logger.info(f"Total proxies fetched: {len(proxies)}")
-        return proxies
+        return unique_proxies
     
-    async def test_proxy(self, proxy: Proxy, test_url: str = "https://httpbin.org/ip") -> bool:
-        """Test if a proxy is working."""
+    async def _test_proxy_quick(self, proxy: Proxy) -> bool:
+        """Quick test if proxy is working (5 second timeout)."""
         try:
-            timeout = aiohttp.ClientTimeout(total=10)
+            timeout = aiohttp.ClientTimeout(total=5)  # Quick 5 second test
             
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                start_time = asyncio.get_event_loop().time()
+                start = asyncio.get_event_loop().time()
                 
+                # Test with a simple, fast endpoint
                 async with session.get(
-                    test_url, 
+                    "http://httpbin.org/ip",
                     proxy=f"http://{proxy.ip}:{proxy.port}",
                     ssl=False
                 ) as response:
-                    elapsed = asyncio.get_event_loop().time() - start_time
+                    elapsed = asyncio.get_event_loop().time() - start
                     
                     if response.status == 200:
                         proxy.is_working = True
                         proxy.response_time = elapsed
                         proxy.last_tested = datetime.now()
-                        logger.info(f"✅ Proxy working: {proxy} ({elapsed:.2f}s)")
                         return True
-                    else:
-                        proxy.is_working = False
-                        logger.warning(f"❌ Proxy failed with status {response.status}: {proxy}")
-                        return False
+                    return False
                         
         except Exception as e:
             proxy.is_working = False
-            logger.warning(f"❌ Proxy test failed: {proxy} - {str(e)}")
             return False
     
-    async def get_working_proxy(self, max_attempts: int = 5) -> Optional[Proxy]:
-        """Get a working proxy, testing multiple if needed."""
-        # First, try to use current proxy if it exists and is working
-        if self.current_proxy and self.current_proxy.is_working:
-            # Retest it to make sure it's still working
-            if await self.test_proxy(self.current_proxy):
-                return self.current_proxy
+    def get_next_working_proxy(self) -> Optional[Proxy]:
+        """Get next working proxy from rotation."""
+        if not self.working_proxies:
+            logger.warning("No working proxies available!")
+            return None
         
-        # Fetch new proxies if we don't have enough
-        if len(self.proxies) < 5:
-            logger.info("Fetching new proxies...")
-            self.proxies = await self.fetch_proxies(limit=30)
+        # Move to next proxy
+        self.current_proxy_index = (self.current_proxy_index + 1) % len(self.working_proxies)
+        self.current_proxy = self.working_proxies[self.current_proxy_index]
         
-        # Test proxies until we find a working one
-        random.shuffle(self.proxies)  # Randomize to distribute load
-        
-        for i, proxy in enumerate(self.proxies[:max_attempts]):
-            logger.info(f"Testing proxy {i+1}/{max_attempts}: {proxy}")
-            
-            if await self.test_proxy(proxy):
-                # Save current to history
-                if self.current_proxy:
-                    self.proxy_history.insert(0, self.current_proxy)
-                    if len(self.proxy_history) > self.max_history:
-                        self.proxy_history.pop()
-                
-                self.current_proxy = proxy
-                return proxy
-        
-        logger.error("No working proxy found!")
-        return None
-    
-    async def rotate_proxy(self) -> Optional[Proxy]:
-        """Rotate to a new working proxy."""
-        logger.info("Rotating to new proxy...")
-        
-        # Mark current as not working
-        if self.current_proxy:
-            self.current_proxy.is_working = False
-        
-        # Get a new working proxy
-        return await self.get_working_proxy()
-    
-    def get_current_proxy(self) -> Optional[Proxy]:
-        """Get the current active proxy."""
+        logger.info(f"🔄 Rotated to proxy {self.current_proxy_index + 1}/{len(self.working_proxies)}: {self.current_proxy}")
         return self.current_proxy
     
-    def get_proxy_stats(self) -> Dict:
-        """Get statistics about proxies."""
-        working = sum(1 for p in self.proxies if p.is_working)
+    def get_current_proxy(self) -> Optional[Proxy]:
+        """Get currently selected proxy."""
+        return self.current_proxy
+    
+    def get_working_proxy_list(self) -> List[Proxy]:
+        """Get list of all working proxies."""
+        return self.working_proxies.copy()
+    
+    def get_stats(self) -> Dict:
+        """Get proxy statistics."""
         return {
-            "total_proxies": len(self.proxies),
-            "working_proxies": working,
+            "working_proxies": len(self.working_proxies),
+            "current_proxy_index": self.current_proxy_index + 1 if self.working_proxies else 0,
             "current_proxy": str(self.current_proxy) if self.current_proxy else None,
-            "proxy_history": [str(p) for p in self.proxy_history[:5]]
         }
 
 
