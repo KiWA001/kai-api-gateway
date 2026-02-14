@@ -538,9 +538,8 @@
                     document.getElementById('portal-status').style.color = 'var(--success)';
                     document.getElementById('portal-start-btn').style.display = 'none';
                     
-                    // Start auto-refresh
+                    // Take initial screenshot only (no auto-refresh to save data)
                     refreshPortalScreenshot();
-                    portalRefreshInterval = setInterval(refreshPortalScreenshot, 3000);
                 }
             } catch (e) {
                 console.log('Portal not running or error:', e);
@@ -564,9 +563,8 @@
                     document.getElementById('portal-status').textContent = '✅ Portal Active';
                     document.getElementById('portal-status').style.color = 'var(--success)';
                     
-                    // Start auto-refresh
+                    // Take initial screenshot only (no auto-refresh to save data)
                     refreshPortalScreenshot();
-                    portalRefreshInterval = setInterval(refreshPortalScreenshot, 3000);
                 } else {
                     throw new Error(data.message || 'Failed to start');
                 }
@@ -642,11 +640,6 @@
             
             try {
                 await fetch('/qaz/copilot/portal/close', { method: 'POST' });
-                
-                if (portalRefreshInterval) {
-                    clearInterval(portalRefreshInterval);
-                    portalRefreshInterval = null;
-                }
                 
                 document.getElementById('portal-controls').style.display = 'none';
                 document.getElementById('portal-status').textContent = '❌ Portal Closed';
@@ -789,7 +782,7 @@
             <div style="background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <span style="font-weight: 600; color: var(--text-muted);">Live Browser View (Click anywhere to interact!)</span>
-                    <span style="font-size: 12px; color: var(--text-muted);">Auto-refreshes every 3s</span>
+                    <span style="font-size: 12px; color: var(--text-muted);">Manual refresh only - saves data</span>
                 </div>
                 <div style="position: relative; cursor: crosshair;" id="screenshot-container">
                     <img id="portal-screenshot" src="" alt="Browser Screenshot" style="width: 100%; border-radius: 4px; border: 1px solid var(--border); display: block;"
