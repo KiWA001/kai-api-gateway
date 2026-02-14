@@ -1151,34 +1151,33 @@
                 <div id="portal-response" style="display: none; margin-top: 15px; padding: 15px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; font-family: monospace; font-size: 13px; max-height: 200px; overflow-y: auto;"></div>
             </div>
             
-            <!-- 🌐 Proxy Rotation Controls -->
+            <!-- 🌐 Custom Proxy Configuration -->
             <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1)); border: 2px solid var(--accent); border-radius: 8px; padding: 15px; margin-top: 20px;">
                 <h4 style="color: var(--accent); margin-bottom: 10px; display: flex; align-items: center;">
-                    🌐 Proxy Rotation for ChatGPT & Copilot
+                    🌐 Custom Proxy (Container-wide)
                     <span id="proxy-status-badge" style="font-size: 11px; background: var(--surface); padding: 2px 8px; border-radius: 4px; margin-left: 10px; color: var(--text-muted);">No Proxy</span>
                 </h4>
                 <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
-                    Rotate IPs to bypass restrictions. Free proxies from multiple countries.
+                    Set your own proxy IP. Format: <code>ip:port</code> or <code>http://ip:port</code>. Applies to entire container.
                 </p>
                 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px;">
-                    <button onclick="fetchNewProxies()" style="background: var(--accent); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
-                        🔄 Fetch New IPs
+                <div style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+                    <input type="text" id="custom-proxy-input" placeholder="e.g., 192.168.1.1:8080 or http://proxy.example.com:3128" 
+                        style="flex: 1; min-width: 250px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 6px; font-family: monospace; font-size: 13px;">
+                    <button onclick="setCustomProxy()" style="background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        💾 Set Proxy
                     </button>
-                    <button onclick="rotateProxy()" style="background: var(--warning); color: black; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
-                        🎲 Rotate IP
+                    <button onclick="clearCustomProxy()" style="background: var(--surface); color: var(--error); border: 1px solid var(--error); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        🗑️ Clear
                     </button>
-                    <button onclick="testProxy()" style="background: var(--success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
-                        ✅ Test Current IP
-                    </button>
-                    <button onclick="restartWithProxy()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
-                        🚀 Restart with Proxy
+                    <button onclick="testCustomProxy()" style="background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        ✅ Test
                     </button>
                 </div>
                 
                 <div id="proxy-info" style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 12px; display: none;">
-                    <div><strong>Current IP:</strong> <span id="current-proxy-display">None</span></div>
-                    <div><strong>Country:</strong> <span id="proxy-country-display">-</span></div>
+                    <div><strong>Current Proxy:</strong> <span id="current-proxy-display">None</span></div>
+                    <div><strong>Status:</strong> <span id="proxy-status-display">-</span></div>
                     <div><strong>Response Time:</strong> <span id="proxy-response-display">-</span></div>
                 </div>
                 
@@ -1187,62 +1186,67 @@
         </div>
     </div>
     
+    <!-- 🔧 Provider Toggle Management Section -->
+    <div class="card" style="margin-top: 30px;">
+        <h2 style="margin-bottom: 15px;">🔧 Provider Toggle Management</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+            Enable or disable providers. Disabled providers won't appear in the dashboard or API responses.
+        </p>
+        
+        <div id="providers-list" style="display: grid; gap: 10px;">
+            <div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading providers...</div>
+        </div>
+    </div>
+    
     <script>
-        // 🌐 Proxy Management Functions
-        async function fetchNewProxies() {
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = 'Fetching...';
-            btn.disabled = true;
+        // 🌐 Custom Proxy Management Functions
+        async function setCustomProxy() {
+            const input = document.getElementById('custom-proxy-input');
+            const proxy = input.value.trim();
+            
+            if (!proxy) {
+                alert('Please enter a proxy address');
+                return;
+            }
             
             try {
-                const res = await fetch('/qaz/proxy/fetch', { method: 'POST' });
+                const res = await fetch('/qaz/proxy/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ proxy: proxy })
+                });
+                
                 const data = await res.json();
                 
                 if (data.status === 'success') {
-                    updateProxyDisplay(data.working_proxy, data.stats);
-                    showProxyMessage(`✅ Fetched ${data.stats.total_proxies} proxies. Working: ${data.stats.working_proxies}`);
+                    showProxyMessage(`✅ Proxy set: ${proxy}`);
+                    await loadProxyStatus();
                 } else {
                     throw new Error(data.message);
                 }
             } catch (e) {
                 showProxyMessage('❌ Error: ' + e.message);
-            } finally {
-                btn.textContent = originalText;
-                btn.disabled = false;
             }
         }
         
-        async function rotateProxy() {
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = 'Rotating...';
-            btn.disabled = true;
+        async function clearCustomProxy() {
+            if (!confirm('Clear the custom proxy?')) return;
             
             try {
-                const res = await fetch('/qaz/proxy/rotate', { method: 'POST' });
+                const res = await fetch('/qaz/proxy/clear', { method: 'POST' });
                 const data = await res.json();
                 
                 if (data.status === 'success') {
-                    document.getElementById('proxy-status-badge').textContent = 'Active';
-                    document.getElementById('proxy-status-badge').style.color = 'var(--success)';
-                    document.getElementById('current-proxy-display').textContent = data.proxy;
-                    document.getElementById('proxy-country-display').textContent = data.country;
-                    document.getElementById('proxy-response-display').textContent = data.response_time;
-                    document.getElementById('proxy-info').style.display = 'block';
-                    showProxyMessage(`✅ Rotated to new IP: ${data.country} (${data.response_time})`);
-                } else {
-                    throw new Error(data.message);
+                    document.getElementById('custom-proxy-input').value = '';
+                    showProxyMessage('✅ Proxy cleared');
+                    await loadProxyStatus();
                 }
             } catch (e) {
                 showProxyMessage('❌ Error: ' + e.message);
-            } finally {
-                btn.textContent = originalText;
-                btn.disabled = false;
             }
         }
         
-        async function testProxy() {
+        async function testCustomProxy() {
             const btn = event.target;
             const originalText = btn.textContent;
             btn.textContent = 'Testing...';
@@ -1253,9 +1257,13 @@
                 const data = await res.json();
                 
                 if (data.is_working) {
+                    document.getElementById('proxy-status-badge').textContent = 'Working';
+                    document.getElementById('proxy-status-badge').style.color = 'var(--success)';
                     showProxyMessage(`✅ Proxy working! Response time: ${data.response_time}`);
                 } else {
-                    showProxyMessage('❌ Proxy not working. Try rotating.');
+                    document.getElementById('proxy-status-badge').textContent = 'Not Working';
+                    document.getElementById('proxy-status-badge').style.color = 'var(--error)';
+                    showProxyMessage('❌ Proxy not working. Check your settings.');
                 }
             } catch (e) {
                 showProxyMessage('❌ Error: ' + e.message);
@@ -1265,39 +1273,26 @@
             }
         }
         
-        async function restartWithProxy() {
-            if (!currentProvider) {
-                alert('Please select a provider first');
-                return;
-            }
-            
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = 'Restarting...';
-            btn.disabled = true;
-            
+        async function loadProxyStatus() {
             try {
-                const res = await fetch(`/qaz/portal/${currentProvider}/restart-with-proxy`, { method: 'POST' });
+                const res = await fetch('/qaz/proxy/status');
                 const data = await res.json();
                 
-                if (data.status === 'success') {
-                    showProxyMessage(`✅ ${data.message}`);
-                    setTimeout(() => takePortalScreenshot(), 3000);
+                if (data.enabled) {
+                    document.getElementById('proxy-status-badge').textContent = 'Active';
+                    document.getElementById('proxy-status-badge').style.color = 'var(--success)';
+                    document.getElementById('current-proxy-display').textContent = data.proxy;
+                    document.getElementById('proxy-status-display').textContent = data.is_working ? 'Working' : 'Not Tested';
+                    document.getElementById('proxy-response-display').textContent = data.response_time || '-';
+                    document.getElementById('proxy-info').style.display = 'block';
+                    document.getElementById('custom-proxy-input').value = data.proxy;
                 } else {
-                    throw new Error(data.message);
+                    document.getElementById('proxy-status-badge').textContent = 'No Proxy';
+                    document.getElementById('proxy-status-badge').style.color = 'var(--text-muted)';
+                    document.getElementById('proxy-info').style.display = 'none';
                 }
             } catch (e) {
-                showProxyMessage('❌ Error: ' + e.message);
-            } finally {
-                btn.textContent = originalText;
-                btn.disabled = false;
-            }
-        }
-        
-        function updateProxyDisplay(proxy, stats) {
-            if (proxy) {
-                document.getElementById('current-proxy-display').textContent = proxy;
-                document.getElementById('proxy-info').style.display = 'block';
+                console.error('Failed to load proxy status:', e);
             }
         }
         
@@ -1309,6 +1304,71 @@
                 el.textContent = '';
             }, 5000);
         }
+        
+        // 🔧 Provider Toggle Functions
+        async function loadProviders() {
+            try {
+                const res = await fetch('/qaz/providers');
+                const data = await res.json();
+                
+                const container = document.getElementById('providers-list');
+                
+                if (!data.providers || data.providers.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No providers found</div>';
+                    return;
+                }
+                
+                container.innerHTML = data.providers.map(provider => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
+                        <div>
+                            <div style="font-weight: 600; color: white;">${provider.name}</div>
+                            <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">${provider.type} • ID: ${provider.id}</div>
+                        </div>
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" 
+                                ${provider.enabled ? 'checked' : ''} 
+                                onchange="toggleProvider('${provider.id}', this.checked)"
+                                style="width: 50px; height: 26px; appearance: none; background: ${provider.enabled ? 'var(--success)' : 'var(--border)'}; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s;">
+                            <span style="margin-left: 10px; font-size: 12px; color: var(--text-muted);">${provider.enabled ? 'Enabled' : 'Disabled'}</span>
+                        </label>
+                    </div>
+                `).join('');
+                
+            } catch (e) {
+                console.error('Failed to load providers:', e);
+                document.getElementById('providers-list').innerHTML = 
+                    `<div style="text-align: center; padding: 20px; color: var(--error);">Error loading providers: ${e.message}</div>`;
+            }
+        }
+        
+        async function toggleProvider(providerId, enabled) {
+            try {
+                const res = await fetch('/qaz/providers/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider_id: providerId, enabled: enabled })
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    // Refresh the list to show updated state
+                    await loadProviders();
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                // Refresh to get correct state
+                await loadProviders();
+            }
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProviders();
+            loadProxyStatus();
+        });
     </script>
 </body>
 

@@ -1,15 +1,13 @@
 """
-Free Proxy Manager for Browser Portals
---------------------------------------
-Fetches and manages free proxy servers for ChatGPT and Copilot.
-Automatically tests proxies and keeps ONLY working ones.
+Proxy Manager for Browser Portals
+---------------------------------
+Supports custom IP proxy configuration for the entire container.
 """
 
 import asyncio
 import aiohttp
-import random
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, Dict
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -20,7 +18,7 @@ class Proxy:
     """Represents a proxy server."""
     ip: str
     port: int
-    country: str
+    country: str = "Custom"
     protocol: str = "http"
     last_tested: Optional[datetime] = None
     is_working: bool = False
@@ -34,233 +32,125 @@ class Proxy:
         return {
             "server": f"{self.protocol}://{self.ip}:{self.port}",
         }
-    
-    def __hash__(self):
-        return hash((self.ip, self.port))
-    
-    def __eq__(self, other):
-        if isinstance(other, Proxy):
-            return self.ip == other.ip and self.port == other.port
-        return False
 
 
-class FreeProxyManager:
-    """Manages free proxy servers - keeps ONLY working ones."""
+class ProxyManager:
+    """Manages proxy configuration - primarily for custom IP."""
     
     def __init__(self):
-        self.working_proxies: List[Proxy] = []  # ONLY working proxies stored here
-        self.current_proxy_index: int = 0
-        self.current_proxy: Optional[Proxy] = None
+        self.custom_proxy: Optional[Proxy] = None
+        self._proxy_str: Optional[str] = None
         
-    async def fetch_and_filter_proxies(self, max_test: int = 20) -> List[Proxy]:
+    def set_custom_proxy(self, proxy_str: str) -> bool:
         """
-        Fetch proxies and test them, keeping ONLY working ones.
-        Returns list of verified working proxies.
+        Set a custom proxy from string format: ip:port or protocol://ip:port
+        Examples: 192.168.1.1:8080, http://proxy.example.com:3128
         """
-        logger.info("🔍 Fetching fresh proxies...")
-        
-        # Fetch from multiple sources
-        all_proxies = await self._fetch_from_sources()
-        
-        if not all_proxies:
-            logger.error("❌ No proxies fetched from any source")
-            return []
-        
-        logger.info(f"📊 Fetched {len(all_proxies)} total proxies, testing up to {max_test}...")
-        
-        # Shuffle for variety
-        random.shuffle(all_proxies)
-        
-        # Test proxies and collect working ones
-        working = []
-        tested = 0
-        
-        for proxy in all_proxies:
-            if tested >= max_test:
-                break
-                
-            tested += 1
-            logger.info(f"🧪 Testing proxy {tested}/{max_test}: {proxy.ip}:{proxy.port}")
+        try:
+            proxy_str = proxy_str.strip()
             
-            if await self._test_proxy_quick(proxy):
-                working.append(proxy)
-                logger.info(f"✅ WORKING! ({proxy.response_time:.2f}s) - Total working: {len(working)}")
-                
-                # Stop once we have enough working proxies
-                if len(working) >= 5:
-                    logger.info("✨ Found 5 working proxies, stopping tests")
-                    break
-            else:
-                logger.debug(f"❌ Dead proxy: {proxy.ip}:{proxy.port}")
-        
-        # REPLACE the list with ONLY working proxies
-        self.working_proxies = working
-        self.current_proxy_index = 0
-        
-        if working:
-            self.current_proxy = working[0]
-            logger.info(f"🎯 Kept {len(working)} WORKING proxies out of {tested} tested")
-        else:
-            self.current_proxy = None
-            logger.warning("⚠️ No working proxies found!")
-        
-        return working
+            # Parse protocol if provided
+            protocol = "http"
+            if "://" in proxy_str:
+                protocol, proxy_str = proxy_str.split("://", 1)
+            
+            # Parse IP and port
+            if ":" not in proxy_str:
+                raise ValueError("Proxy must include port (e.g., ip:port)")
+            
+            parts = proxy_str.rsplit(":", 1)
+            ip = parts[0]
+            port = int(parts[1])
+            
+            self.custom_proxy = Proxy(
+                ip=ip,
+                port=port,
+                protocol=protocol,
+                is_working=True,  # Assume working until tested
+                last_tested=datetime.now()
+            )
+            self._proxy_str = f"{protocol}://{ip}:{port}"
+            
+            logger.info(f"✅ Custom proxy set: {self._proxy_str}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to set custom proxy: {e}")
+            return False
     
-    async def _fetch_from_sources(self) -> List[Proxy]:
-        """Fetch proxies from multiple free sources."""
-        proxies = []
-        
-        # Source 1: Free proxy list (HTTP)
-        try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-                async with session.get(
-                    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
-                ) as response:
-                    if response.status == 200:
-                        text = await response.text()
-                        lines = text.strip().split('\n')
-                        for line in lines[:100]:  # Limit to first 100
-                            if ':' in line:
-                                parts = line.strip().split(':')
-                                if len(parts) >= 2:
-                                    try:
-                                        proxy = Proxy(
-                                            ip=parts[0],
-                                            port=int(parts[1]),
-                                            country='Unknown',
-                                            protocol='http'
-                                        )
-                                        proxies.append(proxy)
-                                    except:
-                                        pass
-                        logger.info(f"✅ Source 1: Got {len(proxies)} proxies")
-        except Exception as e:
-            logger.warning(f"❌ Source 1 failed: {e}")
-        
-        # Source 2: Alternative proxy list
-        try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-                async with session.get(
-                    "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt"
-                ) as response:
-                    if response.status == 200:
-                        text = await response.text()
-                        lines = text.strip().split('\n')
-                        new_count = 0
-                        for line in lines[:100]:
-                            if ':' in line:
-                                parts = line.strip().split(':')
-                                if len(parts) >= 2:
-                                    try:
-                                        proxy = Proxy(
-                                            ip=parts[0],
-                                            port=int(parts[1]),
-                                            country='Unknown',
-                                            protocol='http'
-                                        )
-                                        if proxy not in proxies:
-                                            proxies.append(proxy)
-                                            new_count += 1
-                                    except:
-                                        pass
-                        logger.info(f"✅ Source 2: Got {new_count} new proxies")
-        except Exception as e:
-            logger.warning(f"❌ Source 2 failed: {e}")
-        
-        # Source 3:geonode free proxies API
-        try:
-            url = "https://proxylist.geonode.com/api/proxy-list?limit=100&page=1&sort_by=lastChecked&sort_type=desc&protocols=http"
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        new_count = 0
-                        for item in data.get('data', []):
-                            try:
-                                proxy = Proxy(
-                                    ip=item['ip'],
-                                    port=int(item['port']),
-                                    country=item.get('country', 'Unknown'),
-                                    protocol='http'
-                                )
-                                if proxy not in proxies:
-                                    proxies.append(proxy)
-                                    new_count += 1
-                            except:
-                                pass
-                        logger.info(f"✅ Source 3: Got {new_count} new proxies")
-        except Exception as e:
-            logger.warning(f"❌ Source 3 failed: {e}")
-        
-        # Remove duplicates
-        unique_proxies = list({(p.ip, p.port): p for p in proxies}.values())
-        logger.info(f"📦 Total unique proxies: {len(unique_proxies)}")
-        
-        return unique_proxies
+    def clear_proxy(self):
+        """Clear the custom proxy."""
+        self.custom_proxy = None
+        self._proxy_str = None
+        logger.info("🗑️ Custom proxy cleared")
     
-    async def _test_proxy_quick(self, proxy: Proxy) -> bool:
-        """Quick test if proxy is working (5 second timeout)."""
+    def get_current_proxy(self) -> Optional[Proxy]:
+        """Get the current custom proxy."""
+        return self.custom_proxy
+    
+    def get_proxy_string(self) -> Optional[str]:
+        """Get the proxy string for environment variables."""
+        return self._proxy_str
+    
+    async def test_proxy(self, proxy: Optional[Proxy] = None) -> bool:
+        """Test if a proxy is working."""
+        test_proxy = proxy or self.custom_proxy
+        if not test_proxy:
+            return False
+        
         try:
-            timeout = aiohttp.ClientTimeout(total=5)  # Quick 5 second test
+            timeout = aiohttp.ClientTimeout(total=10)
             
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 start = asyncio.get_event_loop().time()
                 
-                # Test with a simple, fast endpoint
                 async with session.get(
                     "http://httpbin.org/ip",
-                    proxy=f"http://{proxy.ip}:{proxy.port}",
+                    proxy=f"{test_proxy.protocol}://{test_proxy.ip}:{test_proxy.port}",
                     ssl=False
                 ) as response:
                     elapsed = asyncio.get_event_loop().time() - start
                     
                     if response.status == 200:
-                        proxy.is_working = True
-                        proxy.response_time = elapsed
-                        proxy.last_tested = datetime.now()
+                        test_proxy.is_working = True
+                        test_proxy.response_time = elapsed
+                        test_proxy.last_tested = datetime.now()
+                        logger.info(f"✅ Proxy test passed: {elapsed:.2f}s")
                         return True
                     return False
                         
         except Exception as e:
-            proxy.is_working = False
+            logger.warning(f"❌ Proxy test failed: {e}")
+            test_proxy.is_working = False
             return False
     
-    def get_next_working_proxy(self) -> Optional[Proxy]:
-        """Get next working proxy from rotation."""
-        if not self.working_proxies:
-            logger.warning("No working proxies available!")
-            return None
+    def get_status(self) -> Dict:
+        """Get proxy status."""
+        if not self.custom_proxy:
+            return {
+                "enabled": False,
+                "proxy": None,
+                "message": "No custom proxy configured"
+            }
         
-        # Move to next proxy
-        self.current_proxy_index = (self.current_proxy_index + 1) % len(self.working_proxies)
-        self.current_proxy = self.working_proxies[self.current_proxy_index]
-        
-        logger.info(f"🔄 Rotated to proxy {self.current_proxy_index + 1}/{len(self.working_proxies)}: {self.current_proxy}")
-        return self.current_proxy
-    
-    def get_current_proxy(self) -> Optional[Proxy]:
-        """Get currently selected proxy."""
-        return self.current_proxy
-    
-    def get_working_proxy_list(self) -> List[Proxy]:
-        """Get list of all working proxies."""
-        return self.working_proxies.copy()
-    
-    def get_stats(self) -> Dict:
-        """Get proxy statistics."""
         return {
-            "working_proxies": len(self.working_proxies),
-            "current_proxy_index": self.current_proxy_index + 1 if self.working_proxies else 0,
-            "current_proxy": str(self.current_proxy) if self.current_proxy else None,
+            "enabled": True,
+            "proxy": str(self.custom_proxy),
+            "protocol": self.custom_proxy.protocol,
+            "ip": self.custom_proxy.ip,
+            "port": self.custom_proxy.port,
+            "is_working": self.custom_proxy.is_working,
+            "response_time": f"{self.custom_proxy.response_time:.2f}s",
+            "last_tested": self.custom_proxy.last_tested.isoformat() if self.custom_proxy.last_tested else None
         }
 
 
 # Global proxy manager instance
-_proxy_manager: Optional[FreeProxyManager] = None
+_proxy_manager: Optional[ProxyManager] = None
 
-def get_proxy_manager() -> FreeProxyManager:
+def get_proxy_manager() -> ProxyManager:
     """Get the global proxy manager instance."""
     global _proxy_manager
     if _proxy_manager is None:
-        _proxy_manager = FreeProxyManager()
+        _proxy_manager = ProxyManager()
     return _proxy_manager

@@ -143,13 +143,35 @@ class AIEngine:
         return self._providers
 
     def get_all_models(self) -> list[ModelInfo]:
+        """Get all models from enabled providers only."""
+        from provider_state import get_provider_state_manager_sync
+        
         models = []
-        for provider in self._providers.values():
+        state_manager = get_provider_state_manager_sync()
+        enabled_providers = state_manager.get_enabled_provider_ids()
+        
+        for provider_id, provider in self._providers.items():
+            # Only include models from enabled providers
+            if provider_id not in enabled_providers:
+                continue
+                
             for model_name in provider.get_available_models():
                 models.append(
                     ModelInfo(model=model_name, provider=provider.name)
                 )
         return models
+    
+    def get_enabled_providers(self) -> dict[str, BaseProvider]:
+        """Get only enabled providers."""
+        from provider_state import get_provider_state_manager_sync
+        
+        state_manager = get_provider_state_manager_sync()
+        enabled_ids = state_manager.get_enabled_provider_ids()
+        
+        return {
+            k: v for k, v in self._providers.items()
+            if k in enabled_ids
+        }
 
     def _get_score(self, key: str) -> float:
         """
@@ -343,18 +365,40 @@ class AIEngine:
     ) -> dict:
         """
         Send a chat message with adaptive fallback.
+        Only uses enabled providers.
         """
+        from provider_state import get_provider_state_manager_sync
+        
+        # Get enabled providers
+        state_manager = get_provider_state_manager_sync()
+        enabled_providers = state_manager.get_enabled_provider_ids()
+        
+        # Build valid sets from enabled providers only
+        valid_enabled_providers = set(self._providers.keys()) & set(enabled_providers)
+        
+        # Build valid models from enabled providers only
+        valid_enabled_friendly_models = set()
+        valid_enabled_provider_models = set()
+        for fn, pn, pid in MODEL_RANKING:
+            if pn in enabled_providers:
+                valid_enabled_friendly_models.add(fn)
+                valid_enabled_provider_models.add(pid)
+                valid_enabled_provider_models.add(f"{pn}/{pid}")
 
         # Strict Validation
         if model == "auto":
             model = None
 
-        if provider != "auto" and provider not in self._valid_providers:
-            raise ValueError(f"Unknown provider '{provider}'. Available: {list(self._valid_providers)}")
+        if provider != "auto":
+            if provider not in valid_enabled_providers:
+                if provider in self._providers:
+                    raise ValueError(f"Provider '{provider}' is currently disabled.")
+                else:
+                    raise ValueError(f"Unknown provider '{provider}'. Available: {list(valid_enabled_providers)}")
             
         if model:
-            # Check if model is a known friendly name OR a valid provider model ID
-            is_valid = (model in self._valid_friendly_models) or (model in self._valid_provider_models)
+            # Check if model is a known friendly name OR a valid provider model ID (from enabled providers only)
+            is_valid = (model in valid_enabled_friendly_models) or (model in valid_enabled_provider_models)
             if not is_valid:
                 # Also check strict provider/model combos if provider is set
                 if provider != "auto":
@@ -402,10 +446,14 @@ class AIEngine:
                 
             # STRICT MODE: Specific Provider + Any Model
             # Walk this provider's models (sorted by score for this provider)
+            # Only include if provider is enabled
+            if provider not in enabled_providers:
+                raise ValueError(f"Provider '{provider}' is currently disabled.")
+                
             provider_entries = [
                 (fn, pn, pid)
                 for fn, pn, pid in MODEL_RANKING
-                if pn == provider
+                if pn == provider and pn in enabled_providers
             ]
             provider_entries.sort(
                 key=lambda x: self._get_score(f"{x[1]}/{x[2]}"),
@@ -437,15 +485,15 @@ class AIEngine:
             # 1. Identify candidates (provider, model_id)
             candidates = []
             
-            # Is it a friendly name?
+            # Is it a friendly name? (Only from enabled providers)
             for fn, pn, pid in MODEL_RANKING:
-                if fn == model:
+                if fn == model and pn in enabled_providers:
                     candidates.append((pn, pid))
             
-            # If no friendly match, maybe it's a direct ID?
+            # If no friendly match, maybe it's a direct ID? (Only from enabled providers)
             if not candidates:
                  for prov_name, prov in self._providers.items():
-                     if model in prov.get_available_models():
+                     if prov_name in enabled_providers and model in prov.get_available_models():
                          candidates.append((prov_name, model))
             
             if not candidates:
@@ -474,8 +522,17 @@ class AIEngine:
             raise ValueError(f"Strict Mode: Model '{model}' failed on available providers: {errors}")
 
         # Case 3: Global Adaptive Fallback
-        # Use the PERSISTENTLY SORTED ranking
-        adaptive_ranking = self._get_sorted_ranking()
+        # Use the PERSISTENTLY SORTED ranking (filtered to enabled providers only)
+        full_adaptive_ranking = self._get_sorted_ranking()
+        
+        # Filter to only enabled providers
+        adaptive_ranking = [
+            (fn, pn, pid) for fn, pn, pid in full_adaptive_ranking
+            if pn in enabled_providers
+        ]
+        
+        if not adaptive_ranking:
+            raise ValueError("No providers are currently enabled. Please enable at least one provider.")
         
         # === "FALLEN GIANT" EXPLORATION (10% Chance) ===
         # Goal: Give "Better" models a "Fair Chance" if they are currently failing.
@@ -485,7 +542,7 @@ class AIEngine:
             # 1. Identify "Tier 1" models (The Giants)
             # These are the first 5 models in the static configuration.
             # We assume the config is ordered by "Intrinsic Quality".
-            tier1_models = MODEL_RANKING[:5]
+            tier1_models = [m for m in MODEL_RANKING[:5] if m[1] in enabled_providers]
             tier1_keys = {f"{m[1]}/{m[2]}" for m in tier1_models}
             
             # 2. Find a Giant that has fallen (is not in the top 3 of current ranking)

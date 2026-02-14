@@ -88,7 +88,7 @@ PORTAL_CONFIGS = {
 
 
 class BrowserPortal:
-    """Manages an interactive browser session."""
+    """Manages an interactive browser session with auto-refresh on DOM changes."""
     
     def __init__(self, provider: PortalProvider, config: PortalConfig):
         self.provider = provider
@@ -103,6 +103,9 @@ class BrowserPortal:
         self.message_queue = []
         self.last_activity = None
         self.is_logged_in = False
+        self._dom_change_task = None
+        self._last_dom_hash = None
+        self._auto_refresh_enabled = True
         
     async def initialize(self, headless: bool = True, proxy: Optional[Any] = None):
         """Initialize the browser with enhanced stealth and optional proxy."""
@@ -170,6 +173,10 @@ class BrowserPortal:
             logger.info(f"✅ Portal [{self.provider.value}]: Browser ready!")
             
             await self.take_screenshot()
+            
+            # Start DOM monitoring for auto-refresh
+            if self._auto_refresh_enabled:
+                await self.start_dom_monitoring()
             
         except Exception as e:
             logger.error(f"Failed to initialize portal [{self.provider.value}]: {e}")
@@ -411,6 +418,9 @@ class BrowserPortal:
     async def close(self):
         """Close the browser."""
         try:
+            # Stop DOM monitoring first
+            await self.stop_dom_monitoring()
+            
             if self.browser:
                 await self.browser.close()
             if self.playwright:
@@ -428,6 +438,92 @@ class BrowserPortal:
             return self.browser.is_connected()
         except:
             return False
+    
+    async def start_dom_monitoring(self):
+        """Start monitoring DOM changes and auto-refresh screenshot."""
+        if not self._auto_refresh_enabled or self._dom_change_task:
+            return
+        
+        self._dom_change_task = asyncio.create_task(self._dom_monitoring_loop())
+        logger.info(f"Portal [{self.provider.value}]: DOM monitoring started")
+    
+    async def stop_dom_monitoring(self):
+        """Stop DOM monitoring."""
+        if self._dom_change_task:
+            self._dom_change_task.cancel()
+            try:
+                await self._dom_change_task
+            except asyncio.CancelledError:
+                pass
+            self._dom_change_task = None
+            logger.info(f"Portal [{self.provider.value}]: DOM monitoring stopped")
+    
+    async def _dom_monitoring_loop(self):
+        """Monitor DOM for changes and refresh screenshot when needed."""
+        import hashlib
+        
+        check_interval = 2.0  # Check every 2 seconds
+        
+        while self.is_running() and self._auto_refresh_enabled:
+            try:
+                if self.page:
+                    # Get a hash of the current DOM content
+                    current_hash = await self.page.evaluate("""
+                        () => {
+                            // Get visible text content from main content areas
+                            const selectors = [
+                                'main', 'article', '[role="main"]',
+                                '.chat-content', '.message-content',
+                                '[data-message-author-role]',
+                                '.conversation', '.response'
+                            ];
+                            
+                            let content = '';
+                            for (const sel of selectors) {
+                                const el = document.querySelector(sel);
+                                if (el) {
+                                    content += el.innerText || el.textContent || '';
+                                }
+                            }
+                            
+                            // Fallback to body if no content areas found
+                            if (!content) {
+                                content = document.body ? (document.body.innerText || '') : '';
+                            }
+                            
+                            // Simple hash of the content
+                            let hash = 0;
+                            for (let i = 0; i < content.length; i++) {
+                                const char = content.charCodeAt(i);
+                                hash = ((hash << 5) - hash) + char;
+                                hash = hash & hash;
+                            }
+                            return hash.toString();
+                        }
+                    """)
+                    
+                    # If hash changed, DOM has updated
+                    if self._last_dom_hash is not None and current_hash != self._last_dom_hash:
+                        logger.info(f"Portal [{self.provider.value}]: DOM change detected, refreshing screenshot")
+                        await self.take_screenshot()
+                    
+                    self._last_dom_hash = current_hash
+                
+                await asyncio.sleep(check_interval)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Portal [{self.provider.value}]: DOM monitoring error: {e}")
+                await asyncio.sleep(check_interval)
+    
+    def set_auto_refresh(self, enabled: bool):
+        """Enable or disable auto-refresh on DOM changes."""
+        self._auto_refresh_enabled = enabled
+        if enabled and self.is_running():
+            asyncio.create_task(self.start_dom_monitoring())
+        elif not enabled:
+            asyncio.create_task(self.stop_dom_monitoring())
 
 
 # Portal manager

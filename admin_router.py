@@ -773,10 +773,7 @@ async def restart_portal_with_proxy(provider: str):
         # Get current proxy
         current_proxy = proxy_mgr.get_current_proxy()
         if not current_proxy:
-            # Fetch and test a new one
-            current_proxy = await proxy_mgr.get_working_proxy()
-            if not current_proxy:
-                raise HTTPException(status_code=503, detail="No working proxy available")
+            raise HTTPException(status_code=503, detail="No custom proxy configured. Set one first.")
         
         # Close existing portal
         await portal.close()
@@ -789,6 +786,140 @@ async def restart_portal_with_proxy(provider: str):
             "provider": provider,
             "proxy": str(current_proxy),
             "message": f"{provider} portal restarted with proxy {current_proxy.ip}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Provider Toggle Management ---
+
+class ProviderToggleRequest(BaseModel):
+    provider_id: str
+    enabled: bool
+
+@router.get("/providers")
+async def get_providers():
+    """Get all providers with their enabled/disabled status."""
+    try:
+        from provider_state import get_provider_state_manager
+        
+        manager = await get_provider_state_manager()
+        providers = manager.get_all_providers()
+        
+        return {
+            "providers": [
+                {
+                    "id": provider_id,
+                    "name": config["name"],
+                    "type": config["type"],
+                    "enabled": config["enabled"]
+                }
+                for provider_id, config in providers.items()
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/providers/toggle")
+async def toggle_provider(req: ProviderToggleRequest):
+    """Enable or disable a provider."""
+    try:
+        from provider_state import get_provider_state_manager
+        
+        manager = await get_provider_state_manager()
+        success = await manager.set_provider_state(req.provider_id, req.enabled)
+        
+        if success:
+            return {
+                "status": "success",
+                "provider_id": req.provider_id,
+                "enabled": req.enabled,
+                "message": f"Provider '{req.provider_id}' {'enabled' if req.enabled else 'disabled'}"
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"Failed to toggle provider '{req.provider_id}'")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Custom Proxy Management ---
+
+class SetProxyRequest(BaseModel):
+    proxy: str  # Format: ip:port or protocol://ip:port
+
+@router.post("/proxy/set")
+async def set_custom_proxy(req: SetProxyRequest):
+    """Set a custom proxy for the entire container."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        success = proxy_mgr.set_custom_proxy(req.proxy)
+        
+        if success:
+            return {
+                "status": "success",
+                "proxy": req.proxy,
+                "message": "Custom proxy set successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Invalid proxy format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/proxy/clear")
+async def clear_custom_proxy():
+    """Clear the custom proxy."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        proxy_mgr.clear_proxy()
+        
+        return {
+            "status": "success",
+            "message": "Custom proxy cleared"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/proxy/status")
+async def get_proxy_status():
+    """Get current proxy status."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        status = proxy_mgr.get_status()
+        
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/proxy/test")
+async def test_custom_proxy():
+    """Test if the current custom proxy is working."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        
+        if not proxy_mgr.get_current_proxy():
+            raise HTTPException(status_code=400, detail="No custom proxy configured")
+        
+        is_working = await proxy_mgr.test_proxy()
+        status = proxy_mgr.get_status()
+        
+        return {
+            "status": "success",
+            "is_working": is_working,
+            **status
         }
     except HTTPException:
         raise
