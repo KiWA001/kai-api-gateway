@@ -25,6 +25,7 @@ MODEL_RANKING = [
     ("gpt-4o-mini", "g4f", "gpt-4o-mini"),
     ("glm-5", "zai", "glm-5"),
     ("gemini-3-flash", "gemini", "gemini-3-flash"),
+    ("copilot-gpt-4", "copilot", "copilot-gpt-4"),
     ("gpt-oss-20b", "pollinations", "openai"),
     ("mistral-small-3.2", "pollinations", "mistral"),
     
@@ -80,6 +81,9 @@ PROVIDER_MODELS = {
     ],
     "gemini": [
         "gemini-3-flash",
+    ],
+    "copilot": [
+        "copilot-gpt-4",
     ],
     "pollinations": [
         "gpt-oss-20b",

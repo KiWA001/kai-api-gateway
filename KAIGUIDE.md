@@ -68,7 +68,17 @@ Uses Playwright Chromium to interact with `gemini.google.com` as a real browser.
 -   **Files**: `providers/gemini_provider.py`, `test_gemini_browser.py`.
 -   **Status**: **Experimental**. Requires local Playwright environment.
 
-### D. Search & Deep Research
+### E. Microsoft Copilot (Browser-Based Provider)
+Uses Playwright Chromium to interact with `copilot.microsoft.com` as a real browser.
+-   **Why Browser**: Microsoft's Copilot requires a browser session to function properly.
+-   **Input**: Multiple selector strategies for robust input detection (`[data-testid="chat-input"]`, `div[contenteditable="true"]`).
+-   **Features**: Handles "Continue" buttons automatically for longer responses.
+-   **Model**: `copilot-gpt-4` (GPT-4 powered responses).
+-   **Files**: `providers/copilot_provider.py`.
+-   **Status**: **Experimental**. Requires local Playwright environment.
+-   **Vercel**: **DISABLED** (no Chromium in serverless). Local/Docker only.
+
+### F. Search & Deep Research
 The API includes a search engine (`search_engine.py`) powered by DuckDuckGo (via `duckduckgo_search`).
 -   **`/search`**: Returns raw search results.
 -   **`/deep_research`**: Multi-step process:
