@@ -1150,8 +1150,166 @@
                 </div>
                 <div id="portal-response" style="display: none; margin-top: 15px; padding: 15px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; font-family: monospace; font-size: 13px; max-height: 200px; overflow-y: auto;"></div>
             </div>
+            
+            <!-- 🌐 Proxy Rotation Controls -->
+            <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1)); border: 2px solid var(--accent); border-radius: 8px; padding: 15px; margin-top: 20px;">
+                <h4 style="color: var(--accent); margin-bottom: 10px; display: flex; align-items: center;">
+                    🌐 Proxy Rotation for ChatGPT & Copilot
+                    <span id="proxy-status-badge" style="font-size: 11px; background: var(--surface); padding: 2px 8px; border-radius: 4px; margin-left: 10px; color: var(--text-muted);">No Proxy</span>
+                </h4>
+                <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
+                    Rotate IPs to bypass restrictions. Free proxies from multiple countries.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px;">
+                    <button onclick="fetchNewProxies()" style="background: var(--accent); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
+                        🔄 Fetch New IPs
+                    </button>
+                    <button onclick="rotateProxy()" style="background: var(--warning); color: black; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
+                        🎲 Rotate IP
+                    </button>
+                    <button onclick="testProxy()" style="background: var(--success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
+                        ✅ Test Current IP
+                    </button>
+                    <button onclick="restartWithProxy()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">
+                        🚀 Restart with Proxy
+                    </button>
+                </div>
+                
+                <div id="proxy-info" style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 12px; display: none;">
+                    <div><strong>Current IP:</strong> <span id="current-proxy-display">None</span></div>
+                    <div><strong>Country:</strong> <span id="proxy-country-display">-</span></div>
+                    <div><strong>Response Time:</strong> <span id="proxy-response-display">-</span></div>
+                </div>
+                
+                <div id="proxy-message" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);"></div>
+            </div>
         </div>
     </div>
+    
+    <script>
+        // 🌐 Proxy Management Functions
+        async function fetchNewProxies() {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Fetching...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/qaz/proxy/fetch', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    updateProxyDisplay(data.working_proxy, data.stats);
+                    showProxyMessage(`✅ Fetched ${data.stats.total_proxies} proxies. Working: ${data.stats.working_proxies}`);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                showProxyMessage('❌ Error: ' + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        async function rotateProxy() {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Rotating...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/qaz/proxy/rotate', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    document.getElementById('proxy-status-badge').textContent = 'Active';
+                    document.getElementById('proxy-status-badge').style.color = 'var(--success)';
+                    document.getElementById('current-proxy-display').textContent = data.proxy;
+                    document.getElementById('proxy-country-display').textContent = data.country;
+                    document.getElementById('proxy-response-display').textContent = data.response_time;
+                    document.getElementById('proxy-info').style.display = 'block';
+                    showProxyMessage(`✅ Rotated to new IP: ${data.country} (${data.response_time})`);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                showProxyMessage('❌ Error: ' + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        async function testProxy() {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Testing...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/qaz/proxy/test', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.is_working) {
+                    showProxyMessage(`✅ Proxy working! Response time: ${data.response_time}`);
+                } else {
+                    showProxyMessage('❌ Proxy not working. Try rotating.');
+                }
+            } catch (e) {
+                showProxyMessage('❌ Error: ' + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        async function restartWithProxy() {
+            if (!currentProvider) {
+                alert('Please select a provider first');
+                return;
+            }
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Restarting...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`/qaz/portal/${currentProvider}/restart-with-proxy`, { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    showProxyMessage(`✅ ${data.message}`);
+                    setTimeout(() => takePortalScreenshot(), 3000);
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                showProxyMessage('❌ Error: ' + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        function updateProxyDisplay(proxy, stats) {
+            if (proxy) {
+                document.getElementById('current-proxy-display').textContent = proxy;
+                document.getElementById('proxy-info').style.display = 'block';
+            }
+        }
+        
+        function showProxyMessage(msg) {
+            const el = document.getElementById('proxy-message');
+            el.textContent = msg;
+            el.style.color = msg.startsWith('✅') ? 'var(--success)' : 'var(--error)';
+            setTimeout(() => {
+                el.textContent = '';
+            }, 5000);
+        }
+    </script>
 </body>
 
 </html>

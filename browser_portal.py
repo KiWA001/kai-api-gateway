@@ -104,13 +104,16 @@ class BrowserPortal:
         self.last_activity = None
         self.is_logged_in = False
         
-    async def initialize(self, headless: bool = True):
-        """Initialize the browser with enhanced stealth."""
+    async def initialize(self, headless: bool = True, proxy: Optional[Any] = None):
+        """Initialize the browser with enhanced stealth and optional proxy."""
         if self.is_initialized:
             return
             
         try:
             logger.info(f"🚀 Portal [{self.provider.value}]: Launching browser...")
+            if proxy:
+                logger.info(f"Using proxy: {proxy}")
+            
             self.playwright = await async_playwright().start()
             
             # Enhanced stealth args
@@ -125,10 +128,17 @@ class BrowserPortal:
                 "--force-color-profile=srgb",
             ]
             
-            self.browser = await self.playwright.chromium.launch(
-                headless=headless,
-                args=args,
-            )
+            # Build browser launch options
+            launch_options = {
+                "headless": headless,
+                "args": args,
+            }
+            
+            # Add proxy if provided
+            if proxy:
+                launch_options["proxy"] = proxy.to_playwright_format()
+            
+            self.browser = await self.playwright.chromium.launch(**launch_options)
             
             self.context = await self.browser.new_context(
                 viewport=self.config.viewport,

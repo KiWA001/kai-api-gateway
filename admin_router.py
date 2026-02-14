@@ -662,3 +662,135 @@ async def get_all_portal_status():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Proxy Management for Browser Portals ---
+
+@router.post("/proxy/fetch")
+async def fetch_new_proxies():
+    """Fetch new free proxies and test them."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        
+        # Fetch new proxies
+        proxies = await proxy_mgr.fetch_proxies(limit=30)
+        
+        # Test first few to find a working one
+        working_proxy = await proxy_mgr.get_working_proxy(max_attempts=5)
+        
+        stats = proxy_mgr.get_proxy_stats()
+        
+        return {
+            "status": "success",
+            "message": f"Fetched {len(proxies)} proxies",
+            "working_proxy": str(working_proxy) if working_proxy else None,
+            "stats": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/proxy/rotate")
+async def rotate_proxy():
+    """Rotate to a new working proxy."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        
+        # Rotate to new proxy
+        new_proxy = await proxy_mgr.rotate_proxy()
+        
+        if new_proxy:
+            return {
+                "status": "success",
+                "proxy": str(new_proxy),
+                "country": new_proxy.country,
+                "response_time": f"{new_proxy.response_time:.2f}s"
+            }
+        else:
+            raise HTTPException(status_code=503, detail="No working proxy available")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/proxy/status")
+async def get_proxy_status():
+    """Get current proxy status."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        
+        stats = proxy_mgr.get_proxy_stats()
+        current = proxy_mgr.get_current_proxy()
+        
+        return {
+            "current_proxy": str(current) if current else None,
+            **stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/proxy/test")
+async def test_current_proxy():
+    """Test if current proxy is working."""
+    try:
+        from proxy_manager import get_proxy_manager
+        
+        proxy_mgr = get_proxy_manager()
+        current = proxy_mgr.get_current_proxy()
+        
+        if not current:
+            raise HTTPException(status_code=400, detail="No proxy currently set")
+        
+        is_working = await proxy_mgr.test_proxy(current)
+        
+        return {
+            "status": "success",
+            "proxy": str(current),
+            "is_working": is_working,
+            "response_time": f"{current.response_time:.2f}s" if is_working else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/portal/{provider}/restart-with-proxy")
+async def restart_portal_with_proxy(provider: str):
+    """Restart portal with current proxy."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        from proxy_manager import get_proxy_manager
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        proxy_mgr = get_proxy_manager()
+        
+        # Get current proxy
+        current_proxy = proxy_mgr.get_current_proxy()
+        if not current_proxy:
+            # Fetch and test a new one
+            current_proxy = await proxy_mgr.get_working_proxy()
+            if not current_proxy:
+                raise HTTPException(status_code=503, detail="No working proxy available")
+        
+        # Close existing portal
+        await portal.close()
+        
+        # Reinitialize with proxy
+        await portal.initialize(headless=True, proxy=current_proxy)
+        
+        return {
+            "status": "success",
+            "provider": provider,
+            "proxy": str(current_proxy),
+            "message": f"{provider} portal restarted with proxy {current_proxy.ip}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
