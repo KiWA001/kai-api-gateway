@@ -91,3 +91,33 @@ async def reset_usage(key_id: str):
         return {"status": "reset"}
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/keys/lookup")
+async def lookup_key_by_token(token: str):
+    """Lookup API key usage by token (for public dashboard)."""
+    supabase = get_supabase()
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    
+    if not token or not token.startswith("sk-"):
+        raise HTTPException(status_code=400, detail="Invalid token format")
+    
+    try:
+        res = supabase.table("api_keys").select("*").eq("token", token).execute()
+        
+        if not res.data or len(res.data) == 0:
+            raise HTTPException(status_code=404, detail="Key not found")
+        
+        key = res.data[0]
+        
+        # Return limited info (don't expose full token)
+        return {
+            "name": key.get("name"),
+            "usage_tokens": key.get("usage_tokens", 0),
+            "limit_tokens": key.get("limit_tokens", 0),
+            "remaining": key.get("limit_tokens", 0) - key.get("usage_tokens", 0),
+            "created_at": key.get("created_at"),
+            "is_active": key.get("is_active", True)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
