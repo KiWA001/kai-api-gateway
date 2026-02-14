@@ -43,6 +43,14 @@ SPAM_PATTERNS = [
     r"(?i)\n*\s*Regenerate drafts\s*",
     r"(?i)\n*\s*tuneshare\s*",
     r"(?i)\n*\s*more_vert\s*",
+
+    # HuggingChat UI Artifacts
+    r"(?i)\n*\s*agentic\s*",
+    r"(?i)\n*\s*with\s*",
+    r"(?i)\n*\s*Kimi-[-\w]+\s*",
+    r"(?i)\n*\s*via\s*",
+    r"(?i)\n*\s*groq\s*",
+    r"(?i)\n*\s*Copied\s*",
 ]
 
 # Compile patterns once for performance
