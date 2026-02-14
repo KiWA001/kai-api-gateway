@@ -7,3 +7,4 @@ __pycache__/
 KAI_API_DOCKER/
 zai_captured.json
 .vscode/
+debug_screenshots/
