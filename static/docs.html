@@ -983,7 +983,145 @@
         fetchRankingStats();
         setInterval(fetchRankingStats, 5000);
 
+        // --- API Key Usage Lookup ---
+        async function lookupTokenUsage() {
+            const tokenInput = document.getElementById('lookup-token-input');
+            const token = tokenInput.value.trim();
+            const resultDiv = document.getElementById('lookup-result');
+            const errorDiv = document.getElementById('lookup-error');
+            
+            if (!token) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Please enter your API key';
+                resultDiv.style.display = 'none';
+                return;
+            }
+            
+            if (!token.startsWith('sk-')) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Invalid API key format. Should start with "sk-"';
+                resultDiv.style.display = 'none';
+                return;
+            }
+            
+            // Show loading
+            resultDiv.style.display = 'block';
+            errorDiv.style.display = 'none';
+            document.getElementById('lookup-name').textContent = 'Loading...';
+            
+            try {
+                const res = await fetch('/qaz/keys/lookup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token })
+                });
+                
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.detail || 'Key not found');
+                }
+                
+                const data = await res.json();
+                
+                // Update display
+                document.getElementById('lookup-name').textContent = data.name || 'Unnamed Key';
+                
+                const statusEl = document.getElementById('lookup-status');
+                if (data.is_active) {
+                    statusEl.textContent = 'Active';
+                    statusEl.style.color = 'var(--success)';
+                } else {
+                    statusEl.textContent = 'Inactive';
+                    statusEl.style.color = 'var(--error)';
+                }
+                
+                const usagePercent = data.limit_tokens > 0 ? Math.round((data.usage_tokens / data.limit_tokens) * 100) : 0;
+                document.getElementById('lookup-percentage').textContent = usagePercent + '%';
+                document.getElementById('lookup-used').textContent = `Used: ${data.usage_tokens.toLocaleString()}`;
+                document.getElementById('lookup-remaining').textContent = `Remaining: ${data.remaining.toLocaleString()}`;
+                
+                const progressEl = document.getElementById('lookup-progress');
+                progressEl.style.width = Math.min(usagePercent, 100) + '%';
+                
+                // Color coding
+                if (usagePercent > 90) {
+                    progressEl.style.background = 'var(--error)';
+                    document.getElementById('lookup-remaining').style.color = 'var(--error)';
+                } else if (usagePercent > 50) {
+                    progressEl.style.background = 'var(--warning)';
+                    document.getElementById('lookup-remaining').style.color = 'var(--warning)';
+                } else {
+                    progressEl.style.background = 'var(--success)';
+                    document.getElementById('lookup-remaining').style.color = 'var(--success)';
+                }
+                
+            } catch (e) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Error: ' + e.message;
+                resultDiv.style.display = 'none';
+            }
+        }
+        
+        // Allow Enter key to submit
+        document.getElementById('lookup-token-input')?.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                lookupTokenUsage();
+            }
+        });
+
     </script>
+
+    <!-- API Key Usage Checker Section -->
+    <section style="border-top: 1px solid var(--border); padding: 60px 0;">
+        <div class="container">
+            <h2 class="section-title">Check Your API Usage</h2>
+            <p style="color: var(--text-muted); margin-bottom: 30px;">Enter your API key to see your current token usage and remaining quota.</p>
+            
+            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 30px; max-width: 800px; margin: 0 auto;">
+                <div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
+                    <input type="text" id="lookup-token-input" placeholder="Enter your API key (sk-...)" 
+                        style="flex: 1; min-width: 300px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); 
+                               padding: 14px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 15px;">
+                    <button onclick="lookupTokenUsage()" 
+                        style="background: var(--accent); color: white; border: none; padding: 14px 28px; 
+                               border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 15px; white-space: nowrap;">
+                        Check Usage
+                    </button>
+                </div>
+                
+                <div id="lookup-error" style="display: none; margin-bottom: 20px; padding: 12px 16px; background: rgba(239, 68, 68, 0.1); 
+                                              border: 1px solid var(--error); border-radius: 8px; color: var(--error); font-size: 14px;">
+                </div>
+                
+                <div id="lookup-result" style="display: none;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 25px; margin-bottom: 25px;">
+                        <div style="background: var(--bg-primary); padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Key Name</div>
+                            <div id="lookup-name" style="font-size: 20px; font-weight: 600; color: var(--text-primary);">-</div>
+                        </div>
+                        <div style="background: var(--bg-primary); padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Status</div>
+                            <div id="lookup-status" style="font-size: 20px; font-weight: 600;">-</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: var(--bg-primary); padding: 25px; border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="color: var(--text-muted); font-size: 14px;">Token Usage</span>
+                            <span id="lookup-percentage" style="font-weight: 700; font-size: 18px; color: var(--text-primary);">0%</span>
+                        </div>
+                        <div style="width: 100%; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin-bottom: 15px;">
+                            <div id="lookup-progress" style="height: 100%; width: 0%; background: var(--success); transition: all 0.3s ease;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 14px;">
+                            <span id="lookup-used" style="color: var(--text-muted);">Used: 0</span>
+                            <span id="lookup-remaining" style="color: var(--success); font-weight: 600;">Remaining: 1000</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
 </body>
 
