@@ -23,6 +23,9 @@ class CreateKeyRequest(BaseModel):
     name: str
     limit_tokens: Optional[int] = 1000000
 
+class LookupKeyRequest(BaseModel):
+    token: str
+
 # --- Endpoints ---
 
 @router.get("/keys", response_model=List[APIKey])
@@ -93,17 +96,17 @@ async def reset_usage(key_id: str):
          raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/keys/lookup")
-async def lookup_key_by_token(token: str):
+async def lookup_key_by_token(req: LookupKeyRequest):
     """Lookup API key usage by token (for public dashboard)."""
     supabase = get_supabase()
     if not supabase:
         raise HTTPException(status_code=503, detail="Database unavailable")
     
-    if not token or not token.startswith("sk-"):
+    if not req.token or not req.token.startswith("sk-"):
         raise HTTPException(status_code=400, detail="Invalid token format")
     
     try:
-        res = supabase.table("api_keys").select("*").eq("token", token).execute()
+        res = supabase.table("api_keys").select("*").eq("token", req.token).execute()
         
         if not res.data or len(res.data) == 0:
             raise HTTPException(status_code=404, detail="Key not found")
@@ -119,5 +122,12 @@ async def lookup_key_by_token(token: str):
             "created_at": key.get("created_at"),
             "is_active": key.get("is_active", True)
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        if hasattr(e, 'message'):
+            error_msg = str(e.message)
+        elif hasattr(e, 'args') and len(e.args) > 0:
+            error_msg = str(e.args[0])
+        raise HTTPException(status_code=500, detail=error_msg)
