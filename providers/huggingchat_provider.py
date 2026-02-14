@@ -164,7 +164,24 @@ class HuggingChatProvider(BaseProvider):
             # Navigate to HuggingChat
             await page.goto("https://huggingface.co/chat", timeout=60000)
             
-            # Wait for chat interface to load
+            # Wait for page to load
+            await asyncio.sleep(3)
+            
+            # Handle welcome modal if present
+            try:
+                start_btn = await page.wait_for_selector(
+                    'button:has-text("Start chatting")', 
+                    timeout=5000
+                )
+                if start_btn:
+                    logger.info("HuggingChat: Dismissing welcome modal...")
+                    await start_btn.click()
+                    await asyncio.sleep(2)
+                    logger.info("HuggingChat: Welcome modal dismissed")
+            except:
+                logger.info("HuggingChat: No welcome modal found")
+            
+            # Wait for chat interface to fully load
             await asyncio.sleep(2)
 
             # If specific model requested (not omni), try to select it
@@ -175,15 +192,28 @@ class HuggingChatProvider(BaseProvider):
 
             await asyncio.sleep(self.HYDRATION_DELAY)
 
-            # Find and use the chat input
-            input_selector = 'textarea[placeholder*="Ask anything"]'
+            # Find and use the chat input - try multiple strategies
+            input_selector = None
+            input_selectors = [
+                'textarea[placeholder*="Ask"]',
+                'textarea[placeholder*="Message"]',
+                'textarea',
+                '[contenteditable="true"]',
+                'input[type="text"]',
+            ]
             
-            try:
-                await page.wait_for_selector(input_selector, timeout=10000)
-            except:
-                # Fallback selectors
-                input_selector = 'textarea'
-                await page.wait_for_selector(input_selector, timeout=5000)
+            for sel in input_selectors:
+                try:
+                    el = await page.wait_for_selector(sel, timeout=3000)
+                    if el:
+                        input_selector = sel
+                        logger.info(f"HuggingChat: Found input using {sel}")
+                        break
+                except:
+                    continue
+            
+            if not input_selector:
+                raise RuntimeError("Could not find chat input field")
 
             # Type the message
             full_prompt = prompt
