@@ -22,6 +22,19 @@ class CopilotPortal:
         self.is_initialized = False
         self.last_screenshot = "/tmp/copilot_portal.png"
         self.message_queue = []
+        self.last_activity = None
+        
+    def is_running(self) -> bool:
+        """Check if the portal is currently running."""
+        if not self.is_initialized:
+            return False
+        if not self.browser:
+            return False
+        try:
+            # Check if browser is still connected
+            return self.browser.is_connected()
+        except:
+            return False
         
     async def initialize(self):
         """Initialize the browser and navigate to Copilot."""

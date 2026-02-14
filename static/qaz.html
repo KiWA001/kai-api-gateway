@@ -525,6 +525,31 @@
         // Copilot Interactive Portal
         let portalRefreshInterval = null;
         
+        // Check portal status on page load
+        async function checkPortalStatus() {
+            try {
+                const res = await fetch('/qaz/copilot/portal/status');
+                const data = await res.json();
+                
+                if (data.is_running) {
+                    // Portal is already running, restore the UI
+                    document.getElementById('portal-controls').style.display = 'block';
+                    document.getElementById('portal-status').textContent = '✅ Portal Active (Running)';
+                    document.getElementById('portal-status').style.color = 'var(--success)';
+                    document.getElementById('portal-start-btn').style.display = 'none';
+                    
+                    // Start auto-refresh
+                    refreshPortalScreenshot();
+                    portalRefreshInterval = setInterval(refreshPortalScreenshot, 3000);
+                }
+            } catch (e) {
+                console.log('Portal not running or error:', e);
+            }
+        }
+        
+        // Check status when page loads
+        checkPortalStatus();
+        
         async function startCopilotPortal() {
             const btn = document.getElementById('portal-start-btn');
             btn.disabled = true;

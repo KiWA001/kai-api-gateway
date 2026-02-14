@@ -368,6 +368,27 @@ async def close_copilot_portal():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/copilot/portal/status")
+async def get_portal_status():
+    """Check if the portal is currently running."""
+    try:
+        from copilot_portal import get_portal
+        
+        portal = get_portal()
+        is_running = portal.is_running()
+        
+        return {
+            "is_running": is_running,
+            "is_initialized": portal.is_initialized
+        }
+    except Exception as e:
+        return {
+            "is_running": False,
+            "is_initialized": False,
+            "error": str(e)
+        }
+
+
 class PortalClick(BaseModel):
     x: float
     y: float
