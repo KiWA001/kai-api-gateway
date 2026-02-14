@@ -234,8 +234,42 @@ class HuggingChatProvider(BaseProvider):
                 pass
 
             # If specific model requested (not omni), try to select it
-            if selected_model and selected_model != "huggingface-omni":
-                actual_model = selected_model.replace("huggingface-", "")
+            if selected_model and selected_model != "huggingchat-omni":
+                # Map huggingchat-{name} back to full HF model path
+                model_mapping = {
+                    "huggingchat-llama-3.3-70b": "meta-llama/Llama-3.3-70B-Instruct",
+                    "huggingchat-llama-4-scout": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+                    "huggingchat-llama-4-maverick": "meta-llama/Llama-4-Maverick-17B-128E-Instruct",
+                    "huggingchat-llama-3.1-70b": "meta-llama/Meta-Llama-3-70B-Instruct",
+                    "huggingchat-llama-3.1-8b": "meta-llama/Llama-3.1-8B-Instruct",
+                    "huggingchat-llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
+                    "huggingchat-llama-3.2-1b": "meta-llama/Llama-3.2-1B-Instruct",
+                    "huggingchat-llama-3-8b": "meta-llama/Meta-Llama-3-8B-Instruct",
+                    "huggingchat-llama-3-70b": "meta-llama/Meta-Llama-3-70B-Instruct",
+                    "huggingchat-kimi-k2.5": "moonshotai/Kimi-K2.5",
+                    "huggingchat-kimi-k2": "moonshotai/Kimi-K2-Instruct",
+                    "huggingchat-kimi-k2-thinking": "moonshotai/Kimi-K2-Thinking",
+                    "huggingchat-qwen3-235b": "Qwen/Qwen3-235B-A22B",
+                    "huggingchat-qwen3-32b": "Qwen/Qwen3-32B",
+                    "huggingchat-qwen3-14b": "Qwen/Qwen3-14B",
+                    "huggingchat-qwen3-8b": "Qwen/Qwen3-8B",
+                    "huggingchat-qwen3-4b": "Qwen/Qwen3-4B-Instruct-2507",
+                    "huggingchat-qwen2.5-72b": "Qwen/Qwen2.5-72B-Instruct",
+                    "huggingchat-qwen2.5-32b": "Qwen/Qwen2.5-32B-Instruct",
+                    "huggingchat-qwen2.5-7b": "Qwen/Qwen2.5-7B-Instruct",
+                    "huggingchat-deepseek-r1": "deepseek-ai/DeepSeek-R1",
+                    "huggingchat-deepseek-v3": "deepseek-ai/DeepSeek-V3",
+                    "huggingchat-deepseek-v3.2": "deepseek-ai/DeepSeek-V3.2",
+                    "huggingchat-zai-glm-5": "zai-org/GLM-5",
+                    "huggingchat-zai-glm-4.7": "zai-org/GLM-4.7",
+                    "huggingchat-zai-glm-4.5": "zai-org/GLM-4.5",
+                    "huggingchat-minimax-m2.5": "MiniMaxAI/MiniMax-M2.5",
+                    "huggingchat-minimax-m2.1": "MiniMaxAI/MiniMax-M2.1",
+                    "huggingchat-minimax-m2": "MiniMaxAI/MiniMax-M2",
+                    "huggingchat-gemma-3-27b": "google/gemma-3-27b-it",
+                    "huggingchat-mistral-7b": "mistralai/Mistral-7B-Instruct-v0.2",
+                }
+                actual_model = model_mapping.get(selected_model, selected_model.replace("huggingchat-", ""))
                 await self._select_model(page, actual_model)
 
             await asyncio.sleep(self.HYDRATION_DELAY)
