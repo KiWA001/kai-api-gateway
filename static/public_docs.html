@@ -432,9 +432,12 @@
                     <div class="demo-response visible" style="color: #a78bfa;">
                         curl https://kiwa001-kai-api-gateway.hf.space/v1/chat/completions \
                         -H "Content-Type: application/json" \
-                        -H "Authorization: Bearer sk-kai-demo-public" \
+                        -H "Authorization: Bearer YOUR_API_KEY" \
                         -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
                     </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
+                        <strong>Note:</strong> Get your API key from the dashboard above. Dashboard requests don't require authentication.
+                    </p>
                 </div>
                 <div class="endpoint-demo">
                     <span class="demo-label">Try It Live</span>
@@ -560,8 +563,8 @@
             try {
                 let url, body, method = 'POST';
                 let headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer sk-kai-demo-public'  // Use Demo Key for Dashboard
+                    'Content-Type': 'application/json'
+                    // No Authorization header needed for dashboard requests
                 };
 
                 if (type === 'chat-basic') {
