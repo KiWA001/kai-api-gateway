@@ -37,32 +37,121 @@ class CopilotPortal:
             return False
         
     async def initialize(self):
-        """Initialize the browser and navigate to Copilot."""
+        """Initialize the browser and navigate to Copilot with enhanced stealth."""
         if self.is_initialized:
             return
             
         try:
-            logger.info("🚀 Portal: Launching browser...")
+            logger.info("🚀 Portal: Launching browser with stealth...")
             self.playwright = await async_playwright().start()
             
+            # Enhanced browser args for stealth
             self.browser = await self.playwright.chromium.launch(
-                headless=True,  # Headless but we'll screenshot it
+                headless=True,
                 args=[
                     "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--disable-site-isolation-trials",
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-gpu",
+                    "--disable-web-security",
+                    "--disable-features=BlockInsecurePrivateNetworkRequests",
+                    "--disable-features=InterestCohort",
+                    "--window-size=1280,800",
+                    "--start-maximized",
+                    "--force-color-profile=srgb",
+                    "--disable-background-timer-throttling",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-renderer-backgrounding",
                 ],
             )
             
+            # More realistic browser context
             self.context = await self.browser.new_context(
                 viewport={"width": 1280, "height": 800},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                locale="en-US",
+                timezone_id="America/New_York",
+                geolocation={"latitude": 40.7128, "longitude": -74.0060},  # NYC
+                permissions=["geolocation"],
+                color_scheme="light",
+                reduced_motion="no-preference",
             )
             
-            # Hide automation
+            # Enhanced stealth script
             await self.context.add_init_script("""
+                // Override navigator properties
                 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                
+                // Override permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+                
+                // Add Chrome runtime
+                window.chrome = {
+                    runtime: {
+                        OnInstalledReason: {
+                            CHROME_UPDATE: "chrome_update",
+                            INSTALL: "install",
+                            SHARED_MODULE_UPDATE: "shared_module_update",
+                            UPDATE: "update"
+                        },
+                        OnRestartRequiredReason: {
+                            APP_UPDATE: "app_update",
+                            OS_UPDATE: "os_update",
+                            PERIODIC: "periodic"
+                        },
+                        PlatformArch: {
+                            ARM: "arm",
+                            ARM64: "arm64",
+                            MIPS: "mips",
+                            MIPS64: "mips64",
+                            X86_32: "x86-32",
+                            X86_64: "x86-64"
+                        },
+                        PlatformNaclArch: {
+                            ARM: "arm",
+                            MIPS: "mips",
+                            MIPS64: "mips64",
+                            MIPS64_EL: "mips64el",
+                            ARM64: "arm64",
+                            X86_32: "x86-32",
+                            X86_64: "x86-64"
+                        },
+                        PlatformOs: {
+                            ANDROID: "android",
+                            CROS: "cros",
+                            LINUX: "linux",
+                            MAC: "mac",
+                            OPENBSD: "openbsd",
+                            WIN: "win"
+                        },
+                        RequestUpdateCheckStatus: {
+                            NO_UPDATE: "no_update",
+                            THROTTLED: "throttled",
+                            UPDATE_AVAILABLE: "update_available"
+                        }
+                    }
+                };
+                
+                // Override WebGL
+                const getParameter = WebGLRenderingContext.prototype.getParameter;
+                WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445) {
+                        return 'Intel Inc.';
+                    }
+                    if (parameter === 37446) {
+                        return 'Intel Iris OpenGL Engine';
+                    }
+                    return getParameter(parameter);
+                };
             """)
             
             self.page = await self.context.new_page()
@@ -203,19 +292,67 @@ class CopilotPortal:
             logger.error(f"Refresh error: {e}")
     
     async def click_at_coordinates(self, x: float, y: float):
-        """Click at specific coordinates on the page."""
+        """Click at specific coordinates on the page and immediately take screenshot."""
         if not self.page:
             logger.error("Portal: No page available for click")
             return
         
         try:
             logger.info(f"Portal: Clicking at coordinates ({x}, {y})")
+            
+            # First try clicking on main page
             await self.page.mouse.click(x, y)
-            await asyncio.sleep(1)  # Wait for any response
+            
+            # Wait a short moment for the page to react
+            await asyncio.sleep(0.5)
+            
+            # Check if there's an iframe at that location (CAPTCHA is often in iframe)
+            iframe_clicked = await self._try_click_iframe(x, y)
+            
+            if iframe_clicked:
+                logger.info("Portal: Clicked inside iframe")
+            
+            # Wait a bit more for any CAPTCHA processing
+            await asyncio.sleep(1)
+            
+            # Take screenshot immediately
             await self.take_screenshot()
-            logger.info("Portal: Click completed")
+            logger.info("Portal: Click completed, screenshot taken")
+            
         except Exception as e:
             logger.error(f"Portal click error: {e}")
+            # Still try to take screenshot on error
+            try:
+                await self.take_screenshot()
+            except:
+                pass
+    
+    async def _try_click_iframe(self, x: float, y: float) -> bool:
+        """Try to click inside iframes at the given coordinates."""
+        try:
+            # Get all iframes
+            iframes = await self.page.query_selector_all('iframe')
+            
+            for iframe in iframes:
+                try:
+                    # Check if iframe is visible and contains the coordinates
+                    box = await iframe.bounding_box()
+                    if box and box['x'] <= x <= box['x'] + box['width'] and box['y'] <= y <= box['y'] + box['height']:
+                        # Click inside the iframe
+                        frame = await iframe.content_frame()
+                        if frame:
+                            # Calculate relative coordinates
+                            rel_x = x - box['x']
+                            rel_y = y - box['y']
+                            await frame.mouse.click(rel_x, rel_y)
+                            return True
+                except:
+                    continue
+            
+            return False
+        except Exception as e:
+            logger.error(f"Iframe click error: {e}")
+            return False
     
     async def close(self):
         """Close the browser."""
