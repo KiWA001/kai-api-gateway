@@ -68,13 +68,20 @@ Uses Playwright Chromium to interact with `gemini.google.com` as a real browser.
 -   **Files**: `providers/gemini_provider.py`, `test_gemini_browser.py`.
 -   **Status**: **Experimental**. Requires local Playwright environment.
 
-### E. Microsoft Copilot (Browser-Based Provider)
-Uses Playwright Chromium to interact with `copilot.microsoft.com` as a real browser.
--   **Why Browser**: Microsoft's Copilot requires a browser session to function properly.
--   **Input**: Multiple selector strategies for robust input detection (`[data-testid="chat-input"]`, `div[contenteditable="true"]`).
--   **Features**: Handles "Continue" buttons automatically for longer responses.
--   **Model**: `copilot-gpt-4` (GPT-4 powered responses).
--   **Files**: `providers/copilot_provider.py`.
+### E. HuggingChat (Browser-Based Provider)
+Uses Playwright Chromium to interact with `huggingface.co/chat` as a real browser.
+-   **Why Browser**: HuggingChat provides access to 100+ open-source models via web interface.
+-   **Input**: `textarea` with placeholder text.
+-   **Features**: 
+    -   Handles the welcome modal automatically (clicks "Start chatting")
+    -   Supports model selection from dropdown (optional, defaults to "Omni" router)
+    -   Access to top models: Llama 3.3 70B, Qwen 2.5 72B, DeepSeek R1, etc.
+-   **Models**: 
+    -   `omni` - Auto-routes to best model (default)
+    -   `meta-llama/Llama-3.3-70B-Instruct` - Meta's latest Llama model
+    -   `Qwen/Qwen2.5-72B-Instruct` - Alibaba's Qwen model
+    -   `deepseek-ai/DeepSeek-R1` - DeepSeek reasoning model
+-   **Files**: `providers/huggingchat_provider.py`.
 -   **Status**: **Experimental**. Requires local Playwright environment.
 -   **Vercel**: **DISABLED** (no Chromium in serverless). Local/Docker only.
 

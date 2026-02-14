@@ -25,7 +25,9 @@ MODEL_RANKING = [
     ("gpt-4o-mini", "g4f", "gpt-4o-mini"),
     ("glm-5", "zai", "glm-5"),
     ("gemini-3-flash", "gemini", "gemini-3-flash"),
-    ("copilot-gpt-4", "copilot", "copilot-gpt-4"),
+    ("huggingchat-omni", "huggingchat", "omni"),
+    ("llama-3.3-70b", "huggingchat", "meta-llama/Llama-3.3-70B-Instruct"),
+    ("qwen2.5-72b", "huggingchat", "Qwen/Qwen2.5-72B-Instruct"),
     ("gpt-oss-20b", "pollinations", "openai"),
     ("mistral-small-3.2", "pollinations", "mistral"),
     
@@ -82,8 +84,13 @@ PROVIDER_MODELS = {
     "gemini": [
         "gemini-3-flash",
     ],
-    "copilot": [
-        "copilot-gpt-4",
+    "huggingchat": [
+        "omni",
+        "meta-llama/Llama-3.3-70B-Instruct",
+        "Qwen/Qwen2.5-72B-Instruct",
+        "deepseek-ai/DeepSeek-R1",
+        "meta-llama/Llama-3.1-8B-Instruct",
+        "mistralai/Mistral-7B-Instruct-v0.3",
     ],
     "pollinations": [
         "gpt-oss-20b",

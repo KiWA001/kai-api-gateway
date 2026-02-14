@@ -19,7 +19,7 @@ from providers.g4f_provider import G4FProvider
 from providers.pollinations_provider import PollinationsProvider
 from providers.gemini_provider import GeminiProvider
 from providers.zai_provider import ZaiProvider
-from providers.copilot_provider import CopilotProvider
+from providers.huggingchat_provider import HuggingChatProvider
 from config import MODEL_RANKING, PROVIDER_MODELS, SUPABASE_URL, SUPABASE_KEY
 from models import ModelInfo
 from sanitizer import sanitize_response
@@ -58,11 +58,11 @@ class AIEngine:
             self._providers["gemini"] = GeminiProvider()
             logger.info("✅ Gemini provider enabled")
             
-            # Copilot also uses Playwright
-            self._providers["copilot"] = CopilotProvider()
-            logger.info("✅ Copilot provider enabled")
+            # HuggingChat also uses Playwright
+            self._providers["huggingchat"] = HuggingChatProvider()
+            logger.info("✅ HuggingChat provider enabled")
         else:
-            logger.warning("⚠️ Z.ai/Gemini/Copilot providers disabled (Playwright not installed)")
+            logger.warning("⚠️ Z.ai/Gemini/HuggingChat providers disabled (Playwright not installed)")
         # Success Tracker: Key = "provider/model_id"
         # Value = {success, failure, consecutive_failures, avg_time_ms, total_time_ms, count_samples}
         self._stats: dict[str, dict] = {}
