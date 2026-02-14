@@ -15,7 +15,7 @@ import logging
 import re
 from providers.base import BaseProvider
 from config import PROVIDER_MODELS
-from huggingchat_session import get_session_manager
+from provider_sessions import get_provider_session_manager
 
 logger = logging.getLogger("kai_api.huggingchat")
 
@@ -75,11 +75,11 @@ class HuggingChatProvider(BaseProvider):
 
     async def _perform_login(self, context) -> bool:
         """
-        Perform fresh login to Hugging Face and save cookies.
+        Perform fresh login to Hugging Face and save cookies to Supabase.
         Returns True if login successful.
         """
         page = await context.new_page()
-        session_mgr = get_session_manager()
+        session_mgr = get_provider_session_manager()
         
         try:
             logger.info("HuggingChat: Performing fresh login...")
@@ -106,12 +106,12 @@ class HuggingChatProvider(BaseProvider):
                     logger.error("❌ HuggingChat: Login failed")
                     return False
             
-            # Save cookies to session manager
+            # Save cookies to Supabase
             cookies = await context.cookies()
-            session_mgr.set_cookies(cookies)
-            session_mgr.save_session()
+            cookies_dict = [{k: v for k, v in cookie.items()} for cookie in cookies]
+            session_mgr.save_session("huggingchat", cookies_dict, conversation_count=0)
             
-            logger.info("✅ HuggingChat: Login successful, session saved")
+            logger.info("✅ HuggingChat: Login successful, session saved to Supabase")
             await page.close()
             return True
             
@@ -164,7 +164,7 @@ class HuggingChatProvider(BaseProvider):
 
         await self._ensure_browser()
         selected_model = model or "huggingface-omni"
-        session_mgr = get_session_manager()
+        session_mgr = get_provider_session_manager()
 
         # Create context with cookies if we have them
         context = await _browser.new_context(
@@ -181,18 +181,20 @@ class HuggingChatProvider(BaseProvider):
         """)
 
         # Check if we need to login
-        if session_mgr.needs_login():
+        if session_mgr.needs_login("huggingchat"):
             logger.info("HuggingChat: Session needs login")
             login_success = await self._perform_login(context)
             if not login_success:
                 await context.close()
                 raise RuntimeError("Failed to login to Hugging Face")
         else:
-            # Use existing cookies
-            cookies = session_mgr.get_cookies()
-            if cookies:
+            # Use existing cookies from Supabase
+            session = session_mgr.get_session("huggingchat")
+            if session and session.get("session_data", {}).get("cookies"):
+                cookies = session["session_data"]["cookies"]
                 await context.add_cookies(cookies)
-                logger.info(f"HuggingChat: Using existing session (conversation #{session_mgr._conversation_count + 1})")
+                conv_count = session.get("conversation_count", 0)
+                logger.info(f"HuggingChat: Using existing session from Supabase (conversation #{conv_count + 1})")
 
         page = await context.new_page()
 
@@ -276,12 +278,14 @@ class HuggingChatProvider(BaseProvider):
             if not response_text:
                 raise ValueError("Empty response from HuggingChat")
 
-            # Save updated cookies and increment conversation count
+            # Save updated cookies and increment conversation count in Supabase
             cookies = await context.cookies()
-            session_mgr.set_cookies(cookies)
-            session_mgr.increment_conversation()
+            cookies_dict = [{k: v for k, v in cookie.items()} for cookie in cookies]
+            session = session_mgr.get_session("huggingchat")
+            conv_count = session.get("conversation_count", 0) if session else 0
+            session_mgr.save_session("huggingchat", cookies_dict, conversation_count=conv_count + 1)
             
-            logger.info(f"HuggingChat: Conversation complete (total: {session_mgr._conversation_count})")
+            logger.info(f"HuggingChat: Conversation complete (total: {conv_count + 1})")
 
             return {
                 "response": response_text,
@@ -292,7 +296,7 @@ class HuggingChatProvider(BaseProvider):
             logger.error(f"HuggingChat Error: {e}")
             # If error might be session-related, clear it
             if "login" in str(e).lower() or "auth" in str(e).lower():
-                session_mgr.clear_session()
+                session_mgr.delete_session("huggingchat")
             raise
         finally:
             await context.close()
