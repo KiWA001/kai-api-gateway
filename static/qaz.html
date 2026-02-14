@@ -522,33 +522,314 @@
             }
         });
         
-        // Copilot Interactive Portal
-        let portalRefreshInterval = null;
+        // Multi-Provider Browser Portal System
+        let currentProvider = null;
+        let keyboardActive = false;
+        let lastClickCoords = { x: 640, y: 400 };
         
-        // Check portal status on page load
-        async function checkPortalStatus() {
+        async function checkAllPortalStatus() {
             try {
-                const res = await fetch('/qaz/copilot/portal/status');
+                const res = await fetch('/qaz/portal/status');
                 const data = await res.json();
                 
-                if (data.is_running) {
-                    // Portal is already running, restore the UI
-                    document.getElementById('portal-controls').style.display = 'block';
-                    document.getElementById('portal-status').textContent = '✅ Portal Active (Running)';
-                    document.getElementById('portal-status').style.color = 'var(--success)';
-                    document.getElementById('portal-start-btn').style.display = 'none';
+                const listDiv = document.getElementById('active-portals-list');
+                
+                if (data.providers && data.providers.length > 0) {
+                    const activeProviders = data.providers.filter(p => p.is_running);
                     
-                    // Take initial screenshot only (no auto-refresh to save data)
-                    refreshPortalScreenshot();
+                    if (activeProviders.length > 0) {
+                        listDiv.innerHTML = `
+                            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
+                                <strong style="color: var(--success);">✅ Active Portals:</strong>
+                                <div style="display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;">
+                                    ${activeProviders.map(p => `
+                                        <button onclick="switchToProvider('${p.provider}')" 
+                                            style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                            ${p.name}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        listDiv.innerHTML = '<span style="color: var(--text-muted);">No active portals</span>';
+                    }
                 }
             } catch (e) {
-                console.log('Portal not running or error:', e);
+                console.error('Failed to check portal status:', e);
             }
         }
         
-        // Check status when page loads
-        checkPortalStatus();
+        function onProviderChange() {
+            const select = document.getElementById('portal-provider-select');
+            currentProvider = select.value;
+        }
         
+        async function startPortal() {
+            const provider = document.getElementById('portal-provider-select').value;
+            
+            if (!provider) {
+                alert('Please select a provider first');
+                return;
+            }
+            
+            const btn = document.getElementById('portal-start-btn');
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+            
+            try {
+                const res = await fetch('/qaz/portal/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider: provider })
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success' || data.status === 'already_running') {
+                    currentProvider = provider;
+                    showPortalInterface(provider, data.name);
+                    await takePortalScreenshot();
+                    await checkAllPortalStatus();
+                } else {
+                    throw new Error(data.message || 'Failed to start');
+                }
+            } catch (e) {
+                alert('Error starting portal: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Start Portal';
+            }
+        }
+        
+        function showPortalInterface(provider, name) {
+            document.getElementById('portal-interface').style.display = 'block';
+            document.getElementById('current-portal-status').textContent = `✅ ${name || provider} Portal Active`;
+            document.getElementById('portal-provider-select').value = provider;
+        }
+        
+        async function switchToProvider(provider) {
+            currentProvider = provider;
+            document.getElementById('portal-provider-select').value = provider;
+            showPortalInterface(provider, provider);
+            await takePortalScreenshot();
+        }
+        
+        // Advanced Interaction Functions
+        async function handlePortalClick(event) {
+            if (!currentProvider) return;
+            
+            const img = event.target;
+            const rect = img.getBoundingClientRect();
+            
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            const scaleX = 1280 / rect.width;
+            const scaleY = 800 / rect.height;
+            
+            const browserX = Math.round(x * scaleX);
+            const browserY = Math.round(y * scaleY);
+            
+            lastClickCoords = { x: browserX, y: browserY };
+            
+            // Show visual feedback
+            showClickFeedback(x, y);
+            
+            try {
+                await portalAction('click', browserX, browserY);
+                document.getElementById('last-update').textContent = `Clicked at (${browserX}, ${browserY})`;
+                
+                // Auto-enable keyboard mode after clicking on an input
+                setTimeout(() => enableKeyboardMode(), 500);
+            } catch (e) {
+                console.error('Click error:', e);
+            }
+        }
+        
+        function handlePortalDoubleClick(event) {
+            // Double click focuses and enables keyboard
+            handlePortalClick(event);
+            enableKeyboardMode();
+        }
+        
+        function showClickFeedback(x, y) {
+            const container = document.getElementById('portal-screenshot-container');
+            const feedback = document.createElement('div');
+            feedback.style.cssText = `
+                position: absolute;
+                left: ${x}px;
+                top: ${y}px;
+                width: 20px;
+                height: 20px;
+                border: 2px solid var(--accent);
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                animation: pulse 0.5s ease-out;
+            `;
+            container.appendChild(feedback);
+            setTimeout(() => feedback.remove(), 500);
+        }
+        
+        function enableKeyboardMode() {
+            if (!currentProvider) return;
+            
+            keyboardActive = true;
+            document.getElementById('keyboard-status').style.display = 'inline';
+            document.getElementById('portal-focus-overlay').style.display = 'block';
+            document.getElementById('last-update').textContent = '⌨️ Keyboard mode active - type now!';
+            
+            // Focus the hidden input to capture keystrokes
+            const input = document.getElementById('portal-keyboard-capture');
+            input.focus();
+            
+            // Keep focus on the input
+            input.addEventListener('blur', () => {
+                if (keyboardActive) {
+                    setTimeout(() => input.focus(), 10);
+                }
+            });
+            
+            // Click on the last clicked position to ensure focus in browser
+            portalAction('focus', lastClickCoords.x, lastClickCoords.y);
+        }
+        
+        function disableKeyboardMode() {
+            keyboardActive = false;
+            document.getElementById('keyboard-status').style.display = 'none';
+            document.getElementById('portal-focus-overlay').style.display = 'none';
+            document.getElementById('last-update').textContent = 'Click on screenshot to interact';
+        }
+        
+        async function handlePortalKeyDown(event) {
+            if (!keyboardActive || !currentProvider) return;
+            
+            event.preventDefault();
+            
+            const keyMap = {
+                'Enter': 'Enter',
+                'Tab': 'Tab',
+                'Backspace': 'Backspace',
+                'Delete': 'Delete',
+                'ArrowUp': 'ArrowUp',
+                'ArrowDown': 'ArrowDown',
+                'ArrowLeft': 'ArrowLeft',
+                'ArrowRight': 'ArrowRight',
+                'Escape': 'Escape'
+            };
+            
+            if (keyMap[event.key]) {
+                await portalAction('keypress', null, null, keyMap[event.key]);
+            } else if (event.key.length === 1) {
+                // Regular character
+                await portalAction('type', null, null, null, event.key);
+            }
+        }
+        
+        async function portalAction(action, x = null, y = null, key = null, text = null) {
+            if (!currentProvider) return;
+            
+            const body = {
+                provider: currentProvider,
+                action: action,
+                x: x,
+                y: y,
+                key: key,
+                text: text
+            };
+            
+            try {
+                const res = await fetch('/qaz/portal/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    // Screenshot is taken automatically by backend
+                    setTimeout(() => takePortalScreenshot(), 500);
+                }
+            } catch (e) {
+                console.error('Portal action error:', e);
+            }
+        }
+        
+        async function takePortalScreenshot() {
+            if (!currentProvider) return;
+            
+            const img = document.getElementById('portal-screenshot');
+            img.src = `/qaz/portal/${currentProvider}/screenshot?t=${Date.now()}`;
+        }
+        
+        async function portalNewChat() {
+            if (!currentProvider) return;
+            await fetch(`/qaz/portal/${currentProvider}/newchat`, { method: 'POST' });
+            setTimeout(() => takePortalScreenshot(), 1000);
+        }
+        
+        async function portalRefresh() {
+            if (!currentProvider) return;
+            await fetch(`/qaz/portal/${currentProvider}/refresh`, { method: 'POST' });
+            setTimeout(() => takePortalScreenshot(), 3000);
+        }
+        
+        async function sendPortalMessage() {
+            if (!currentProvider) return;
+            
+            const input = document.getElementById('portal-message-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            try {
+                const res = await fetch(`/qaz/portal/${currentProvider}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    input.value = '';
+                    document.getElementById('portal-response').textContent = data.response;
+                    document.getElementById('portal-response').style.display = 'block';
+                    setTimeout(() => takePortalScreenshot(), 1000);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        async function closeCurrentPortal() {
+            if (!currentProvider) return;
+            
+            if (!confirm(`Close the ${currentProvider} portal?`)) return;
+            
+            try {
+                await fetch(`/qaz/portal/${currentProvider}/close`, { method: 'POST' });
+                
+                document.getElementById('portal-interface').style.display = 'none';
+                document.getElementById('portal-provider-select').value = '';
+                currentProvider = null;
+                keyboardActive = false;
+                disableKeyboardMode();
+                
+                await checkAllPortalStatus();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAllPortalStatus();
+        });
+        
+        // Legacy Copilot portal functions (for backward compatibility)
         async function startCopilotPortal() {
             const btn = document.getElementById('portal-start-btn');
             btn.disabled = true;
@@ -764,83 +1045,111 @@
         }
     </script>
     
-    <!-- Copilot Interactive Portal -->
+    <!-- Multi-Provider Interactive Browser Portal -->
     <div class="card" style="margin-top: 30px; border: 2px solid var(--accent);">
-        <h2 style="margin-bottom: 15px; color: var(--accent);">🖥️ Copilot Interactive Portal</h2>
+        <h2 style="margin-bottom: 15px; color: var(--accent);">🌐 Multi-Provider Browser Portal</h2>
         <p style="color: var(--text-muted); margin-bottom: 20px;">
-            Control the browser directly to interact with Microsoft Copilot. You can see the page, solve CAPTCHAs, and send messages.
+            Control browser sessions for Copilot, HuggingChat, ChatGPT, Gemini, and Z.ai. Click on the screenshot to interact, type with your keyboard!
         </p>
         
-        <div id="portal-status" style="margin-bottom: 20px; font-weight: 600; color: var(--text-muted);">❌ Portal Not Started</div>
+        <!-- Provider Selector -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <select id="portal-provider-select" style="flex: 1; min-width: 200px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; font-size: 14px;" onchange="onProviderChange()">
+                <option value="">Select Provider...</option>
+                <option value="copilot">🤖 Microsoft Copilot</option>
+                <option value="huggingchat">🤗 HuggingChat (Auto-login)</option>
+                <option value="chatgpt">💬 ChatGPT</option>
+                <option value="gemini">✨ Google Gemini</option>
+                <option value="zai">🌟 Z.ai</option>
+            </select>
+            <button id="portal-start-btn" onclick="startPortal()" style="background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                🚀 Start Portal
+            </button>
+            <button id="portal-refresh-all-btn" onclick="checkAllPortalStatus()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                🔄 Refresh Status
+            </button>
+        </div>
         
-        <button id="portal-start-btn" onclick="startCopilotPortal()" style="background: var(--accent); color: white; border: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 16px;">
-            🚀 Start Browser Portal
-        </button>
+        <!-- Active Portals List -->
+        <div id="active-portals-list" style="margin-bottom: 20px;"></div>
         
-        <div id="portal-controls" style="display: none; margin-top: 25px;">
-            <!-- Screenshot Display with Click Support -->
+        <!-- Portal Interface -->
+        <div id="portal-interface" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div id="current-portal-status" style="font-weight: 600; color: var(--success);">✅ Portal Active</div>
+                <button onclick="closeCurrentPortal()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                    🗑️ Close Portal
+                </button>
+            </div>
+            
+            <!-- Interactive Screenshot with Keyboard Support -->
             <div style="background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="font-weight: 600; color: var(--text-muted);">Live Browser View (Click anywhere to interact!)</span>
-                    <span style="font-size: 12px; color: var(--text-muted);">Manual refresh only - saves data</span>
+                    <div>
+                        <span style="font-weight: 600; color: var(--text-muted);">Interactive Browser</span>
+                        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px;">
+                            🖱️ Click to focus • ⌨️ Type with keyboard • 👆 Interactive screenshot
+                        </span>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <span id="keyboard-status" style="font-size: 11px; color: var(--success); background: var(--surface); padding: 4px 8px; border-radius: 4px; display: none;">⌨️ Keyboard Active</span>
+                    </div>
                 </div>
-                <div style="position: relative; cursor: crosshair;" id="screenshot-container">
-                    <img id="portal-screenshot" src="" alt="Browser Screenshot" style="width: 100%; border-radius: 4px; border: 1px solid var(--border); display: block;"
-                        onclick="handleScreenshotClick(event)">
-                    <div id="click-coordinates" style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; display: none;"></div>
+                
+                <div style="position: relative;" id="portal-screenshot-container">
+                    <img id="portal-screenshot" src="" alt="Browser Screenshot" 
+                        style="width: 100%; border-radius: 4px; border: 1px solid var(--border); display: block; cursor: crosshair;"
+                        onclick="handlePortalClick(event)"
+                        ondblclick="handlePortalDoubleClick(event)">
+                    
+                    <!-- Overlay for keyboard focus indication -->
+                    <div id="portal-focus-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 3px solid var(--success); border-radius: 4px; pointer-events: none; display: none;"></div>
+                </div>
+                
+                <!-- Hidden input for keyboard capture -->
+                <input type="text" id="portal-keyboard-capture" 
+                    style="position: absolute; opacity: 0; pointer-events: none;"
+                    onkeydown="handlePortalKeyDown(event)"
+                    onkeyup="handlePortalKeyUp(event)">
+                
+                <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--text-muted);">
+                    <span>💡 Click image to focus, then type with your keyboard</span>
+                    <span id="last-update">Waiting for interaction...</span>
                 </div>
             </div>
             
-            <!-- CAPTCHA Helper -->
-            <div style="background: var(--warning); background-opacity: 0.1; border: 2px solid var(--warning); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-                <h4 style="color: var(--warning); margin-bottom: 10px;">🤖 CAPTCHA Helper</h4>
-                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 10px;">
-                    If you see a "Verify you are human" checkbox, click this button or click directly on the checkbox in the image above.
-                </p>
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="clickCaptchaCheckbox()" style="background: var(--warning); color: black; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
-                        ☑️ Click CAPTCHA Checkbox
-                    </button>
-                    <button onclick="clickCaptchaCenter()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
-                        🎯 Click Screen Center
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Control Buttons -->
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <button onclick="portalNewChat()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+            <!-- Quick Actions -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                <button onclick="portalAction('click', 640, 350)" style="background: var(--warning); color: black; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                    ☑️ Click Center (CAPTCHA)
+                </button>
+                <button onclick="portalNewChat()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
                     🆕 New Chat
                 </button>
-                <button onclick="portalRefresh()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                <button onclick="portalRefresh()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
                     🔄 Refresh Page
                 </button>
-                <button onclick="refreshPortalScreenshot()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">
+                <button onclick="takePortalScreenshot()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
                     📸 Screenshot
                 </button>
-                <button onclick="closePortal()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                    🗑️ Close
+                <button onclick="enableKeyboardMode()" style="background: var(--success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                    ⌨️ Enable Keyboard
                 </button>
             </div>
             
             <!-- Message Input -->
             <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
-                <label style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--text-muted);">Send Message to Copilot</label>
+                <label style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--text-muted);">Send Message</label>
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" id="portal-message-input" placeholder="Type your message here..." 
-                        style="flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; font-size: 14px;">
-                    <button id="portal-send-btn" onclick="sendPortalMessage()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                    <input type="text" id="portal-message-input" placeholder="Type your message and press Enter..." 
+                        style="flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; font-size: 14px;"
+                        onkeypress="if(event.key==='Enter')sendPortalMessage()">
+                    <button onclick="sendPortalMessage()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
                         Send
                     </button>
                 </div>
-                
-                <!-- Response Display -->
                 <div id="portal-response" style="display: none; margin-top: 15px; padding: 15px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; font-family: monospace; font-size: 13px; max-height: 200px; overflow-y: auto;"></div>
             </div>
-            
-            <p style="color: var(--text-muted); font-size: 12px; margin-top: 15px;">
-                💡 <strong>Tip:</strong> Click anywhere on the screenshot to interact! The click coordinates will be sent to the browser. After solving CAPTCHA, send a test message.
-            </p>
         </div>
     </div>
 </body>
