@@ -259,11 +259,18 @@ async def get_public_openapi():
 
 
 # ---------- Search Routes ----------
+from auth import verify_api_key
+from fastapi import Depends
+
 @app.post("/search")
-async def search_endpoint(request: Request):
+async def search_endpoint(
+    request: Request,
+    key_data: dict = Depends(verify_api_key)
+):
     """
     Perform a standard web search.
     Body: {"query": "something", "limit": 10}
+    Requires: Authorization header (free, no token deduction)
     """
     try:
         data = await request.json()
@@ -280,10 +287,14 @@ async def search_endpoint(request: Request):
 
 
 @app.post("/deep_research")
-async def deep_research_endpoint(request: Request):
+async def deep_research_endpoint(
+    request: Request,
+    key_data: dict = Depends(verify_api_key)
+):
     """
     Perform Deep Research: Search -> Scrape -> Synthesize.
     Body: {"query": "complex topic"}
+    Requires: Authorization header (free, no token deduction)
     """
     try:
         data = await request.json()
