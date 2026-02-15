@@ -160,5 +160,7 @@ def get_provider_state_manager_sync() -> ProviderStateManager:
     global _provider_state_manager
     if _provider_state_manager is None:
         _provider_state_manager = ProviderStateManager()
-        # Don't initialize here - just return the instance
+        # Initialize with defaults synchronously
+        _provider_state_manager._providers = PROVIDERS.copy()
+        _provider_state_manager._initialized = True
     return _provider_state_manager
