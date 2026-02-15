@@ -1,1565 +1,1343 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-AI API - Admin Command v2</title>
-    <!-- Google Fonts -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#09090b">
+    <title>K-AI API - Admin</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap"
-        rel="stylesheet">
-    <!-- Chart.js -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // Use a global flag to ensure pie chart only renders once
-        window.pieChartRendered = false;
-    </script>
-
+    
     <style>
         :root {
             --bg: #09090b;
             --surface: #18181b;
-            --border: #27272a;
-            --text: #e4e4e7;
-            --text-muted: #a1a1aa;
+            --surface-hover: #27272a;
+            --border: #3f3f46;
+            --text: #fafafa;
+            --text-secondary: #a1a1aa;
             --accent: #8b5cf6;
-            /* Violet */
-            --accent-glow: rgba(139, 92, 246, 0.2);
+            --accent-hover: #7c3aed;
             --success: #22c55e;
             --error: #ef4444;
             --warning: #f59e0b;
+            --info: #3b82f6;
         }
-
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
-
+        
+        html {
+            font-size: 16px;
+        }
+        
         body {
-            background-color: var(--bg);
+            background: var(--bg);
             color: var(--text);
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             min-height: 100vh;
-            padding: 20px;
-            max-width: 100vw;
+            line-height: 1.5;
             overflow-x: hidden;
         }
-
-        /* Mobile responsive fixes */
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-
-            .header {
-                flex-direction: column;
-                gap: 15px;
-                align-items: flex-start;
-            }
-
-            .header h1 {
-                font-size: 20px;
-            }
-
-            .card {
-                padding: 15px;
-            }
-
-            table {
-                font-size: 11px;
-            }
-
-            th, td {
-                padding: 8px 5px;
-                white-space: nowrap;
-            }
-
-            td:nth-child(2) {
-                max-width: 80px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }
-
-            .grid {
-                grid-template-columns: 1fr;
-            }
-
-            .stat-value {
-                font-size: 24px;
-            }
-
-            /* Prevent horizontal scroll on mobile */
-            html, body {
-                overflow-x: hidden;
-                width: 100%;
-            }
-
-            /* Make table scrollable horizontally within its container */
-            .table-container {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-
-            table {
-                width: auto;
-                min-width: 100%;
+        
+        /* Mobile-First Base Styles */
+        .app-container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 12px;
+        }
+        
+        @media (min-width: 768px) {
+            .app-container {
+                max-width: 1200px;
+                padding: 20px;
             }
         }
-
-        h1,
-        h2,
-        h3 {
-            font-family: 'Inter', sans-serif;
-            letter-spacing: -0.5px;
-        }
-
-        .header {
+        
+        /* Header */
+        .app-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
+            padding: 16px 0;
             border-bottom: 1px solid var(--border);
-        }
-
-        .header h1 {
-            font-size: 24px;
-            font-weight: 800;
-            background: linear-gradient(to right, #fff, #a1a1aa);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .header .status {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            color: var(--accent);
-            background: var(--accent-glow);
-            padding: 4px 10px;
-            border-radius: 99px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
             margin-bottom: 20px;
         }
-
+        
+        .app-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        @media (max-width: 480px) {
+            .app-header h1 {
+                font-size: 1.25rem;
+            }
+            
+            .header-actions {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .header-actions button {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+        
+        /* Cards */
         .card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
         }
-
-        .card h2 {
-            font-size: 16px;
-            color: var(--text-muted);
-            margin-bottom: 15px;
+        
+        @media (min-width: 768px) {
+            .card {
+                padding: 24px;
+                margin-bottom: 24px;
+            }
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .card-title {
+            font-size: 1.125rem;
             font-weight: 600;
+            color: var(--text);
         }
-
-        .stat-value {
-            font-size: 32px;
-            font-weight: 800;
-            color: #fff;
+        
+        .card-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
         }
-
-        .stat-sub {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 5px;
+        
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            min-height: 40px;
         }
-
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+        
+        .btn-secondary {
+            background: var(--surface-hover);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: transparent;
+            color: var(--error);
+            border: 1px solid var(--error);
+        }
+        
+        .btn-icon {
+            padding: 10px;
+            min-width: 40px;
+        }
+        
+        /* Input Fields */
+        .input-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .input-field {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 0.9375rem;
+            transition: border-color 0.2s ease;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .input-field::placeholder {
+            color: var(--text-secondary);
+        }
+        
+        /* Select */
+        .select-field {
+            padding: 12px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 0.9375rem;
+            cursor: pointer;
+            min-width: 180px;
+        }
+        
+        /* Browser Section */
+        .browser-container {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .browser-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+        
+        @media (max-width: 480px) {
+            .browser-toolbar {
+                padding: 8px;
+                gap: 6px;
+            }
+        }
+        
+        .browser-nav-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-size: 1.25rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .browser-nav-btn:active {
+            background: var(--surface-hover);
+        }
+        
+        .browser-address-bar {
+            flex: 1;
+            display: flex;
+            gap: 6px;
+            min-width: 200px;
+        }
+        
+        .browser-address-input {
+            flex: 1;
+            padding: 8px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text);
+            font-size: 0.875rem;
+            font-family: monospace;
+        }
+        
+        .browser-address-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .browser-stream-container {
+            position: relative;
+            background: #000;
+            aspect-ratio: 16/10;
+            overflow: hidden;
+        }
+        
+        .browser-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .browser-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            cursor: crosshair;
+        }
+        
+        .browser-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            color: var(--text);
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .browser-status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .browser-controls {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            flex-wrap: wrap;
+        }
+        
+        /* Video Quality Selector */
+        .quality-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--bg);
+            border-radius: 8px;
+        }
+        
+        .quality-btn {
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        
+        .quality-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        
+        /* On-Screen Keyboard */
+        .osk-container {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 12px 8px;
+            position: sticky;
+            bottom: 0;
+            z-index: 100;
+        }
+        
+        .osk-row {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin-bottom: 6px;
+        }
+        
+        .osk-key {
+            min-width: 32px;
+            height: 42px;
+            padding: 0 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            max-width: 50px;
+        }
+        
+        .osk-key:active {
+            background: var(--accent);
+        }
+        
+        .osk-key.wide {
+            flex: 2;
+            max-width: 80px;
+        }
+        
+        .osk-key.extra-wide {
+            flex: 3;
+            max-width: 120px;
+        }
+        
+        @media (min-width: 768px) {
+            .osk-key {
+                min-width: 40px;
+                height: 48px;
+                font-size: 1rem;
+            }
+        }
+        
+        /* Provider Toggle Cards */
+        .provider-grid {
+            display: grid;
+            gap: 12px;
+        }
+        
+        .provider-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        
+        .provider-info h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .provider-info span {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 52px;
+            height: 28px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border);
+            transition: .3s;
+            border-radius: 28px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--success);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+        
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 -16px;
+            padding: 0 16px;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
-            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            min-width: 600px;
         }
-
+        
         th {
             text-align: left;
-            color: var(--text-muted);
-            padding: 10px;
-            border-bottom: 1px solid var(--border);
+            padding: 12px;
+            color: var(--text-secondary);
             font-weight: 600;
-        }
-
-        td {
-            padding: 10px;
             border-bottom: 1px solid var(--border);
-            color: var(--text);
+            white-space: nowrap;
         }
-
-        tr:last-child td {
-            border-bottom: none;
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
         }
-
-        .rank-badge {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            line-height: 24px;
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        
+        @media (min-width: 640px) {
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        .stat-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
             text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Progress Bar */
+        .progress-container {
+            margin-top: 8px;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: var(--surface-hover);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--success);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Connection Status */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.875rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            background: var(--border);
-            color: var(--text-muted);
-            font-weight: bold;
-            font-size: 11px;
+            background: var(--text-secondary);
         }
-
-        tr:nth-child(1) .rank-badge {
-            background: #Eab308;
-            color: #000;
+        
+        .status-dot.connected {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
         }
-
-        /* Gold */
-        tr:nth-child(2) .rank-badge {
-            background: #94a3b8;
-            color: #000;
+        
+        .status-dot.streaming {
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+            animation: pulse 1.5s infinite;
         }
-
-        /* Silver */
-        tr:nth-child(3) .rank-badge {
-            background: #b45309;
-            color: #fff;
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
-
-        /* Bronze */
-
-        .score-good {
-            color: var(--success);
+        
+        /* Modal for messages */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
         }
-
-        .score-bad {
-            color: var(--error);
+        
+        .modal-backdrop.active {
+            display: flex;
         }
-
-        canvas {
-            max-height: 300px;
+        
+        .modal-content {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
             width: 100%;
+            text-align: center;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--surface-hover);
         }
     </style>
 </head>
-
 <body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div>
+                <h1>K-AI Admin</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="testAllAI()">🧪 Test</button>
+                <button class="btn btn-danger" onclick="clearStats()">🗑️ Clear</button>
+            </div>
+        </header>
 
-    <div class="header">
-        <h1>Admin Command</h1>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <span class="status">LIVE SYSTEM MONITOR</span>
-            <button id="btn-test-all" onclick="testAllAI()" style="
-                background: var(--accent); color: white; border: none; padding: 8px 16px; 
-                border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
-                Test All AI
-            </button>
-            <button id="btn-clear" onclick="clearStats()" style="
-                background: transparent; color: var(--error); border: 1px solid var(--error); 
-                padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
-                Clear Stats
-            </button>
+        <!-- API Keys Section -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">API Keys</div>
+                    <div class="card-subtitle">Manage access tokens</div>
+                </div>
+                <button class="btn btn-success" onclick="createKey()">+ New Key</button>
+            </div>
+            <div class="table-container">
+                <table id="keys-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Token</th>
+                            <th>Usage</th>
+                            <th>Created</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="keys-list">
+                        <tr><td colspan="5" style="text-align:center;padding:20px;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Token Lookup -->
+        <div class="card">
+            <div class="card-title" style="margin-bottom:12px;">Check Usage</div>
+            <div class="input-group">
+                <input type="text" id="lookup-token" class="input-field" placeholder="Enter API key (sk-...)">
+                <button class="btn btn-primary" onclick="lookupToken()">Check</button>
+            </div>
+            <div id="lookup-result" style="display:none;margin-top:16px;padding:16px;background:var(--bg);border-radius:10px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+                    <span id="lookup-name" style="font-weight:600;">-</span>
+                    <span id="lookup-status">-</span>
+                </div>
+                <div class="progress-container">
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:4px;">
+                        <span id="lookup-percentage">0%</span>
+                        <span id="lookup-remaining">-</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="lookup-progress" class="progress-fill" style="width:0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Browser Portal Section -->
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div style="padding:16px;border-bottom:1px solid var(--border);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <div>
+                        <div class="card-title">Browser Portal</div>
+                        <div class="card-subtitle">Remote browser control</div>
+                    </div>
+                    <div class="connection-status">
+                        <div class="status-dot" id="browser-status-dot"></div>
+                        <span id="browser-status-text">Offline</span>
+                    </div>
+                </div>
+                
+                <div class="input-group">
+                    <select id="portal-provider-select" class="select-field" onchange="onProviderChange()">
+                        <option value="">Select Provider...</option>
+                        <option value="copilot">🤖 Copilot</option>
+                        <option value="huggingchat">🤗 HuggingChat</option>
+                        <option value="chatgpt">💬 ChatGPT</option>
+                        <option value="gemini">✨ Gemini</option>
+                        <option value="zai">🌟 Z.ai</option>
+                    </select>
+                    <button class="btn btn-primary" id="portal-start-btn" onclick="startBrowser()">Connect</button>
+                </div>
+            </div>
+
+            <!-- Browser Interface -->
+            <div id="browser-interface" style="display:none;">
+                <!-- Toolbar -->
+                <div class="browser-toolbar">
+                    <button class="browser-nav-btn" onclick="browserGoBack()" title="Back">←</button>
+                    <button class="browser-nav-btn" onclick="browserGoForward()" title="Forward">→</button>
+                    <button class="browser-nav-btn" onclick="browserRefresh()" title="Refresh">↻</button>
+                    
+                    <div class="browser-address-bar">
+                        <input type="text" id="browser-address" class="browser-address-input" placeholder="Enter URL..." onkeypress="if(event.key==='Enter')browserNavigate()">
+                        <button class="btn btn-primary btn-icon" onclick="browserNavigate()">Go</button>
+                    </div>
+                    
+                    <div class="quality-selector">
+                        <span style="font-size:0.75rem;color:var(--text-secondary);">Quality:</span>
+                        <button class="quality-btn active" onclick="setStreamQuality('low')" id="quality-low">Low</button>
+                        <button class="quality-btn" onclick="setStreamQuality('medium')" id="quality-medium">Med</button>
+                        <button class="quality-btn" onclick="setStreamQuality('high')" id="quality-high">High</button>
+                    </div>
+                    
+                    <button class="btn btn-danger btn-icon" onclick="closeBrowser()">✕</button>
+                </div>
+
+                <!-- Video Stream -->
+                <div class="browser-stream-container">
+                    <img id="browser-stream" class="browser-stream" src="" alt="Browser Stream">
+                    <div class="browser-overlay" id="browser-overlay" onclick="handleStreamClick(event)"></div>
+                    
+                    <div class="browser-loading" id="browser-loading" style="display:none;">
+                        <div class="spinner"></div>
+                        <span>Connecting...</span>
+                    </div>
+                </div>
+
+                <!-- Status Bar -->
+                <div class="browser-status-bar">
+                    <span id="browser-page-title">Ready</span>
+                    <span id="browser-coords">Click to interact</span>
+                </div>
+
+                <!-- Message Input -->
+                <div style="padding:12px;border-top:1px solid var(--border);">
+                    <div class="input-group">
+                        <input type="text" id="browser-message" class="input-field" placeholder="Type message and press Enter..." onkeypress="if(event.key==='Enter')sendMessage()">
+                        <button class="btn btn-success" onclick="sendMessage()">Send</button>
+                        <button class="btn btn-secondary" onclick="toggleKeyboard()">⌨️ Keyboard</button>
+                    </div>
+                </div>
+
+                <!-- On-Screen Keyboard -->
+                <div id="osk" class="osk-container" style="display:none;">
+                    <div class="osk-row">
+                        <button class="osk-key" onclick="oskType('q')">q</button>
+                        <button class="osk-key" onclick="oskType('w')">w</button>
+                        <button class="osk-key" onclick="oskType('e')">e</button>
+                        <button class="osk-key" onclick="oskType('r')">r</button>
+                        <button class="osk-key" onclick="oskType('t')">t</button>
+                        <button class="osk-key" onclick="oskType('y')">y</button>
+                        <button class="osk-key" onclick="oskType('u')">u</button>
+                        <button class="osk-key" onclick="oskType('i')">i</button>
+                        <button class="osk-key" onclick="oskType('o')">o</button>
+                        <button class="osk-key" onclick="oskType('p')">p</button>
+                    </div>
+                    <div class="osk-row">
+                        <button class="osk-key" onclick="oskType('a')">a</button>
+                        <button class="osk-key" onclick="oskType('s')">s</button>
+                        <button class="osk-key" onclick="oskType('d')">d</button>
+                        <button class="osk-key" onclick="oskType('f')">f</button>
+                        <button class="osk-key" onclick="oskType('g')">g</button>
+                        <button class="osk-key" onclick="oskType('h')">h</button>
+                        <button class="osk-key" onclick="oskType('j')">j</button>
+                        <button class="osk-key" onclick="oskType('k')">k</button>
+                        <button class="osk-key" onclick="oskType('l')">l</button>
+                    </div>
+                    <div class="osk-row">
+                        <button class="osk-key wide" onclick="toggleOSKShift()">⇧</button>
+                        <button class="osk-key" onclick="oskType('z')">z</button>
+                        <button class="osk-key" onclick="oskType('x')">x</button>
+                        <button class="osk-key" onclick="oskType('c')">c</button>
+                        <button class="osk-key" onclick="oskType('v')">v</button>
+                        <button class="osk-key" onclick="oskType('b')">b</button>
+                        <button class="osk-key" onclick="oskType('n')">n</button>
+                        <button class="osk-key" onclick="oskType('m')">m</button>
+                        <button class="osk-key wide" onclick="oskBackspace()">⌫</button>
+                    </div>
+                    <div class="osk-row">
+                        <button class="osk-key" onclick="oskType('123')">123</button>
+                        <button class="osk-key extra-wide" onclick="oskType(' ')">Space</button>
+                        <button class="osk-key" onclick="oskType('.')">.</button>
+                        <button class="osk-key wide" onclick="oskEnter()">Enter</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Browsers List -->
+            <div id="active-browsers" style="padding:12px;border-top:1px solid var(--border);display:none;"></div>
+        </div>
+
+        <!-- Provider Toggles -->
+        <div class="card">
+            <div class="card-title" style="margin-bottom:16px;">Provider Settings</div>
+            <div class="provider-grid" id="providers-list">
+                <div style="text-align:center;padding:20px;color:var(--text-secondary);">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Proxy Settings -->
+        <div class="card">
+            <div class="card-title" style="margin-bottom:12px;">Proxy Configuration</div>
+            <div class="input-group">
+                <input type="text" id="proxy-input" class="input-field" placeholder="ip:port or http://ip:port">
+                <button class="btn btn-primary" onclick="setProxy()">Set</button>
+                <button class="btn btn-secondary" onclick="clearProxy()">Clear</button>
+            </div>
+            <div id="proxy-status" style="margin-top:12px;font-size:0.875rem;color:var(--text-secondary);display:none;"></div>
         </div>
     </div>
 
-    <!-- API Key Management Section -->
-    <div class="card" style="margin-bottom: 30px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h2>API Key Management</h2>
-            <button onclick="createKey()"
-                style="background: var(--success); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                + Create New Key
-            </button>
-        </div>
-
-        <div class="table-container">
-        <table id="keys-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Token Prefix</th>
-                    <th>Usage / Limit</th>
-                    <th>Created</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="keys-list">
-                <tr>
-                    <td colspan="5" style="text-align:center; padding:20px;">Loading keys...</td>
-                </tr>
-            </tbody>
-        </table>
-        </div>
-    </div>
-
-    <div id="error-console"
-        style="display:none; background:#ef4444; color:white; padding:10px; margin-bottom:20px; border-radius:8px; font-family:monospace;">
-    </div>
-
+    <!-- Scripts -->
     <script>
-        // Global Error Handler for Production Debugging
-        window.onerror = function (msg, url, line, col, error) {
-            const errDiv = document.getElementById('error-console');
-            errDiv.style.display = 'block';
-            errDiv.innerHTML += `<div><strong>Error:</strong> ${msg}<br><small>${url}:${line}:${col}</small></div>`;
-            return false;
-        };
-        // Catch Promise Rejections
-        window.onunhandledrejection = function (event) {
-            const errDiv = document.getElementById('error-console');
-            errDiv.style.display = 'block';
-            errDiv.innerHTML += `<div><strong>Promise Error:</strong> ${event.reason}</div>`;
-        };
-    </script>
+        // Global state
+        let currentProvider = null;
+        let streamInterval = null;
+        let streamQuality = 'low';
+        let oskShift = false;
 
-    <script>
-        // --- Actions ---
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadKeys();
+            loadProviders();
+            checkBrowserStatus();
+        });
 
-        async function testAllAI() {
-            const btn = document.getElementById('btn-test-all');
-            const originalText = btn.textContent;
-
-            // Show loading state
-            btn.textContent = "Running Tests... (Parallel)";
-            btn.disabled = true;
-            btn.style.opacity = "0.7";
-
-            try {
-                // Call backend
-                const res = await fetch('/qaz/test_all', { method: 'POST' });
-                const results = await res.json();
-
-                console.log("Test Results:", results);
-
-                // Show simple alert summary
-                let passed = results.filter(r => r.status === 'PASS').length;
-                let total = results.length;
-                alert(`Test Complete.\nPassed: ${passed}/${total}`);
-
-            } catch (e) {
-                alert("Test Failed: " + e.message);
-            } finally {
-                btn.textContent = originalText;
-                btn.disabled = false;
-                btn.style.opacity = "1";
-            }
-        }
-
-        async function clearStats() {
-            if (!confirm("⚠️ ARE YOU SURE?\n\nThis will wipe all model statistics from memory AND the database.\nThis action cannot be undone.")) {
-                return;
-            }
-
-            const btn = document.getElementById('btn-clear');
-            btn.textContent = "Clearing...";
-            btn.disabled = true;
-
-            try {
-                await fetch('/qaz/clear_stats', { method: 'POST' });
-                alert("Stats cleared successfully.");
-            } catch (e) {
-                alert("Clear failed: " + e.message);
-            } finally {
-                btn.textContent = "Clear Stats";
-                btn.disabled = false;
-            }
-        }
+        // API Keys Functions
         async function loadKeys() {
             try {
                 const res = await fetch('/qaz/keys');
                 const keys = await res.json();
-
                 const tbody = document.getElementById('keys-list');
-                tbody.innerHTML = '';
-
-                keys.forEach(key => {
-                    const usagePercent = key.limit_tokens > 0 ? Math.round((key.usage_tokens / key.limit_tokens) * 100) : 0;
-                    const color = usagePercent > 90 ? 'red' : (usagePercent > 50 ? 'orange' : '#22c55e');
-
-                    const row = `
+                
+                if (keys.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-secondary);">No keys found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = keys.map(key => {
+                    const percent = key.limit_tokens > 0 ? Math.round((key.usage_tokens / key.limit_tokens) * 100) : 0;
+                    const color = percent > 90 ? 'var(--error)' : percent > 50 ? 'var(--warning)' : 'var(--success)';
+                    
+                    return `
                         <tr>
-                            <td style="font-weight:bold; color:white;">${key.name}</td>
-                            <td style="font-family:monospace; color:var(--text-muted);">${key.token.substring(0, 10)}...</td>
+                            <td style="font-weight:500;">${key.name}</td>
+                            <td style="font-family:monospace;font-size:0.75rem;color:var(--text-secondary);">${key.token.substring(0, 12)}...</td>
                             <td>
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <span style="min-width:100px;">${key.usage_tokens.toLocaleString()} / ${key.limit_tokens.toLocaleString()}</span>
-                                    <div style="width:100px; height:6px; background:#333; border-radius:3px; overflow:hidden;">
-                                        <div style="height:100%; width:${Math.min(usagePercent, 100)}%; background:${color};"></div>
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <span style="font-size:0.75rem;min-width:60px;">${percent}%</span>
+                                    <div class="progress-bar" style="flex:1;max-width:80px;height:4px;">
+                                        <div class="progress-fill" style="width:${percent}%;background:${color}"></div>
                                     </div>
                                 </div>
                             </td>
-                            <td>${new Date(key.created_at).toLocaleDateString()}</td>
+                            <td style="font-size:0.75rem;color:var(--text-secondary);">${new Date(key.created_at).toLocaleDateString()}</td>
                             <td>
-                                <button onclick="revokeKey('${key.id}')" style="background:var(--error); color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Revoke</button>
+                                <button class="btn btn-danger" style="padding:6px 12px;font-size:0.75rem;" onclick="revokeKey('${key.id}')">Revoke</button>
                             </td>
                         </tr>
                     `;
-                    tbody.innerHTML += row;
-                });
+                }).join('');
             } catch (e) {
-                console.error("Failed to load keys", e);
+                console.error('Failed to load keys:', e);
             }
         }
 
         async function createKey() {
-            const name = prompt("Enter Name for new API Key (e.g. 'John Doe'):");
+            const name = prompt('Enter name for new API key:');
             if (!name) return;
-
+            
             try {
                 const res = await fetch('/qaz/keys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name, limit_tokens: 1000000 })
+                    body: JSON.stringify({ name, limit_tokens: 1000000 })
                 });
-
+                
                 if (res.ok) {
                     const key = await res.json();
-                    alert(`✅ Key Created!\n\nToken: ${key.token}\n\nSAVE THIS NOW. IT IS SHOWN ONLY ONCE.`);
+                    alert(`✅ Key created!\n\nToken: ${key.token}\n\nSave this now!`);
                     loadKeys();
-                } else {
-                    alert("Failed to create key");
                 }
             } catch (e) {
-                alert("Error: " + e.message);
+                alert('Error creating key: ' + e.message);
             }
         }
 
         async function revokeKey(id) {
-            if (!confirm("Are you sure you want to delete this key? Access will be immediately revoked.")) return;
+            if (!confirm('Delete this key?')) return;
             try {
                 await fetch(`/qaz/keys/${id}`, { method: 'DELETE' });
                 loadKeys();
             } catch (e) {
-                alert("Error: " + e.message);
+                alert('Error: ' + e.message);
             }
         }
 
-        // Initial Load
-        loadKeys();
-    </script>
-
-    <!-- Token Lookup Section -->
-    <div class="card" style="margin-top: 30px;">
-        <h2 style="margin-bottom: 20px;">Check Your API Usage</h2>
-        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-            <input type="text" id="lookup-token" placeholder="Enter your API key (sk-...)" 
-                style="flex: 1; min-width: 300px; background: var(--bg); border: 1px solid var(--border); color: var(--text); 
-                       padding: 12px 16px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 14px;">
-            <button onclick="lookupToken()" 
-                style="background: var(--accent); color: white; border: none; padding: 12px 24px; 
-                       border-radius: 8px; font-weight: 600; cursor: pointer; white-space: nowrap;">
-                Check Usage
-            </button>
-        </div>
-        
-        <div id="lookup-result" style="display: none;">
-            <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                    <div>
-                        <div style="color: var(--text-muted); font-size: 12px; margin-bottom: 5px;">Key Name</div>
-                        <div id="lookup-name" style="font-size: 18px; font-weight: 600; color: white;">-</div>
-                    </div>
-                    <div>
-                        <div style="color: var(--text-muted); font-size: 12px; margin-bottom: 5px;">Status</div>
-                        <div id="lookup-status" style="font-size: 18px; font-weight: 600;">-</div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="color: var(--text-muted);">Token Usage</span>
-                        <span id="lookup-percentage" style="font-weight: 600;">0%</span>
-                    </div>
-                    <div style="width: 100%; height: 12px; background: #333; border-radius: 6px; overflow: hidden; margin-bottom: 10px;">
-                        <div id="lookup-progress" style="height: 100%; width: 0%; background: var(--success); transition: width 0.3s;"></div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 14px;">
-                        <span id="lookup-used" style="color: var(--text-muted);">Used: 0</span>
-                        <span id="lookup-remaining" style="color: var(--success);">Remaining: 1000</span>
-                    </div>
-                </div>
-                
-                <div id="lookup-error" style="display: none; margin-top: 15px; padding: 10px; background: rgba(239, 68, 68, 0.2); 
-                                              border: 1px solid var(--error); border-radius: 6px; color: var(--error);">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
+        // Token Lookup
         async function lookupToken() {
-            const tokenInput = document.getElementById('lookup-token');
-            const token = tokenInput.value.trim();
-            const resultDiv = document.getElementById('lookup-result');
-            const errorDiv = document.getElementById('lookup-error');
-            
-            if (!token) {
-                alert('Please enter your API key');
-                return;
-            }
-            
-            if (!token.startsWith('sk-')) {
-                alert('Invalid API key format. Should start with "sk-"');
-                return;
-            }
+            const token = document.getElementById('lookup-token').value.trim();
+            if (!token) return;
             
             try {
-                resultDiv.style.display = 'block';
-                errorDiv.style.display = 'none';
-                
-                // Show loading state
-                document.getElementById('lookup-name').textContent = 'Loading...';
-                document.getElementById('lookup-status').textContent = '-';
-                document.getElementById('lookup-used').textContent = 'Used: -';
-                document.getElementById('lookup-remaining').textContent = 'Remaining: -';
-                document.getElementById('lookup-progress').style.width = '0%';
-                
                 const res = await fetch('/qaz/keys/lookup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: token })
+                    body: JSON.stringify({ token })
                 });
                 
-                if (!res.ok) {
-                    let errorMessage = 'Key not found';
-                    try {
-                        const error = await res.json();
-                        errorMessage = error.detail || error.message || JSON.stringify(error) || 'Key not found';
-                    } catch (parseError) {
-                        errorMessage = 'Key not found or server error';
-                    }
-                    throw new Error(errorMessage);
-                }
+                if (!res.ok) throw new Error('Key not found');
                 
                 const data = await res.json();
+                const percent = Math.round((data.usage_tokens / data.limit_tokens) * 100);
+                const remaining = data.limit_tokens - data.usage_tokens;
+                const color = percent > 90 ? 'var(--error)' : percent > 50 ? 'var(--warning)' : 'var(--success)';
                 
-                // Update display
-                document.getElementById('lookup-name').textContent = data.name || 'Unnamed Key';
-                
-                const statusEl = document.getElementById('lookup-status');
-                if (data.is_active) {
-                    statusEl.textContent = 'Active';
-                    statusEl.style.color = 'var(--success)';
-                } else {
-                    statusEl.textContent = 'Inactive';
-                    statusEl.style.color = 'var(--error)';
-                }
-                
-                const usagePercent = data.limit_tokens > 0 ? Math.round((data.usage_tokens / data.limit_tokens) * 100) : 0;
-                document.getElementById('lookup-percentage').textContent = usagePercent + '%';
-                document.getElementById('lookup-used').textContent = `Used: ${data.usage_tokens.toLocaleString()}`;
-                document.getElementById('lookup-remaining').textContent = `Remaining: ${data.remaining.toLocaleString()}`;
-                
-                const progressEl = document.getElementById('lookup-progress');
-                progressEl.style.width = Math.min(usagePercent, 100) + '%';
-                
-                // Color coding
-                if (usagePercent > 90) {
-                    progressEl.style.background = 'var(--error)';
-                    document.getElementById('lookup-remaining').style.color = 'var(--error)';
-                } else if (usagePercent > 50) {
-                    progressEl.style.background = 'var(--warning)';
-                    document.getElementById('lookup-remaining').style.color = 'var(--warning)';
-                } else {
-                    progressEl.style.background = 'var(--success)';
-                    document.getElementById('lookup-remaining').style.color = 'var(--success)';
-                }
-                
+                document.getElementById('lookup-result').style.display = 'block';
+                document.getElementById('lookup-name').textContent = data.name;
+                document.getElementById('lookup-status').innerHTML = `<span style="color:${data.is_active ? 'var(--success)' : 'var(--error)'}">${data.is_active ? '● Active' : '● Inactive'}</span>`;
+                document.getElementById('lookup-percentage').textContent = percent + '%';
+                document.getElementById('lookup-remaining').textContent = `${remaining.toLocaleString()} tokens left`;
+                document.getElementById('lookup-progress').style.width = percent + '%';
+                document.getElementById('lookup-progress').style.background = color;
             } catch (e) {
-                errorDiv.style.display = 'block';
-                const errorMsg = e.message || (typeof e === 'object' ? JSON.stringify(e) : String(e));
-                errorDiv.textContent = 'Error: ' + errorMsg;
-                document.getElementById('lookup-name').textContent = 'Not Found';
+                alert('Key not found');
             }
         }
-        
-        // Allow Enter key to submit
-        document.getElementById('lookup-token').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                lookupToken();
-            }
-        });
-        
-        // Enhanced Browser Portal System
-        let currentProvider = null;
-        let keyboardActive = false;
-        let lastClickCoords = { x: 640, y: 400 };
-        let screenshotInterval = null;
-        
-        async function checkAllPortalStatus() {
+
+        // Browser Functions
+        async function checkBrowserStatus() {
             try {
                 const res = await fetch('/qaz/portal/status');
                 const data = await res.json();
                 
-                const listDiv = document.getElementById('active-portals-list');
+                const active = data.providers.filter(p => p.is_running);
+                const container = document.getElementById('active-browsers');
                 
-                if (data.providers && data.providers.length > 0) {
-                    const activeProviders = data.providers.filter(p => p.is_running);
-                    
-                    if (activeProviders.length > 0) {
-                        listDiv.innerHTML = `
-                            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
-                                <strong style="color: var(--success);">✅ Active Browsers:</strong>
-                                <div style="display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;">
-                                    ${activeProviders.map(p => `
-                                        <button onclick="switchToProvider('${p.provider}')" 
-                                            style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                                            ${p.name}
-                                        </button>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        listDiv.innerHTML = '<span style="color: var(--text-muted);">No active browsers</span>';
-                    }
+                if (active.length > 0) {
+                    container.style.display = 'block';
+                    container.innerHTML = `
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            ${active.map(p => `
+                                <button class="btn btn-secondary" style="font-size:0.75rem;" onclick="switchToBrowser('${p.provider}')">
+                                    ${p.name}
+                                </button>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    container.style.display = 'none';
                 }
             } catch (e) {
-                console.error('Failed to check portal status:', e);
+                console.error('Status check failed:', e);
             }
         }
-        
+
         function onProviderChange() {
-            const select = document.getElementById('portal-provider-select');
-            currentProvider = select.value;
+            currentProvider = document.getElementById('portal-provider-select').value;
         }
-        
-        async function startPortal() {
+
+        async function startBrowser() {
             const provider = document.getElementById('portal-provider-select').value;
-            
             if (!provider) {
-                alert('Please select a provider first');
+                alert('Select a provider first');
                 return;
             }
             
             const btn = document.getElementById('portal-start-btn');
             btn.disabled = true;
-            btn.textContent = 'Starting...';
+            btn.textContent = 'Connecting...';
             
             try {
                 const res = await fetch('/qaz/portal/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider: provider })
+                    body: JSON.stringify({ provider })
                 });
                 
                 const data = await res.json();
-                
                 if (data.status === 'success' || data.status === 'already_running') {
                     currentProvider = provider;
-                    showBrowserInterface(provider, data.name);
-                    await updateBrowserInfo();
-                    await refreshScreenshot();
-                    await checkAllPortalStatus();
-                } else {
-                    throw new Error(data.message || 'Failed to start');
+                    showBrowserInterface();
+                    startStream();
+                    checkBrowserStatus();
                 }
             } catch (e) {
-                alert('Error starting browser: ' + e.message);
+                alert('Error: ' + e.message);
             } finally {
                 btn.disabled = false;
-                btn.textContent = '🚀 Start Browser';
+                btn.textContent = 'Connect';
             }
         }
-        
-        function showBrowserInterface(provider, name) {
+
+        function showBrowserInterface() {
             document.getElementById('browser-interface').style.display = 'block';
-            document.getElementById('portal-connection-status').textContent = '🟢 Connected';
-            document.getElementById('portal-connection-status').style.color = 'var(--success)';
-            document.getElementById('portal-provider-select').value = provider;
+            document.getElementById('browser-status-dot').classList.add('connected');
+            document.getElementById('browser-status-text').textContent = 'Connected';
+        }
+
+        function startStream() {
+            if (streamInterval) clearInterval(streamInterval);
             
-            // Start periodic screenshot updates (every 3 seconds when visible)
-            if (screenshotInterval) clearInterval(screenshotInterval);
-            screenshotInterval = setInterval(refreshScreenshot, 3000);
+            const img = document.getElementById('browser-stream');
+            const quality = streamQuality === 'low' ? 0.5 : streamQuality === 'medium' ? 0.75 : 1;
+            
+            // MJPEG stream approach
+            const updateFrame = () => {
+                if (!currentProvider) return;
+                img.src = `/qaz/portal/${currentProvider}/screenshot?t=${Date.now()}&quality=${quality}`;
+            };
+            
+            // Update every 500ms for smooth video-like experience
+            streamInterval = setInterval(updateFrame, 500);
+            updateFrame();
+            
+            document.getElementById('browser-status-dot').classList.add('streaming');
         }
-        
-        async function switchToProvider(provider) {
-            currentProvider = provider;
-            document.getElementById('portal-provider-select').value = provider;
-            showBrowserInterface(provider, provider);
-            await updateBrowserInfo();
-            await refreshScreenshot();
+
+        function setStreamQuality(quality) {
+            streamQuality = quality;
+            document.querySelectorAll('.quality-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`quality-${quality}`).classList.add('active');
+            
+            // Restart stream with new quality
+            if (currentProvider) {
+                startStream();
+            }
         }
-        
-        // Browser Navigation Functions
+
+        // Browser Navigation
         async function browserGoBack() {
             if (!currentProvider) return;
-            try {
-                setBrowserLoading(true);
-                const res = await fetch(`/qaz/portal/${currentProvider}/back`, { method: 'POST' });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    updateAddressBar(data.current_url);
-                    await refreshScreenshot();
-                }
-            } catch (e) {
-                console.error('Go back error:', e);
-            } finally {
-                setBrowserLoading(false);
-            }
+            await fetch(`/qaz/portal/${currentProvider}/back`, { method: 'POST' });
         }
-        
+
         async function browserGoForward() {
             if (!currentProvider) return;
-            try {
-                setBrowserLoading(true);
-                const res = await fetch(`/qaz/portal/${currentProvider}/forward`, { method: 'POST' });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    updateAddressBar(data.current_url);
-                    await refreshScreenshot();
-                }
-            } catch (e) {
-                console.error('Go forward error:', e);
-            } finally {
-                setBrowserLoading(false);
-            }
+            await fetch(`/qaz/portal/${currentProvider}/forward`, { method: 'POST' });
         }
-        
+
         async function browserRefresh() {
             if (!currentProvider) return;
-            try {
-                setBrowserLoading(true);
-                await fetch(`/qaz/portal/${currentProvider}/refresh`, { method: 'POST' });
-                await refreshScreenshot();
-            } catch (e) {
-                console.error('Refresh error:', e);
-            } finally {
-                setBrowserLoading(false);
-            }
+            await fetch(`/qaz/portal/${currentProvider}/refresh`, { method: 'POST' });
         }
-        
+
         async function browserNavigate() {
             if (!currentProvider) return;
-            const url = document.getElementById('browser-address-bar').value.trim();
+            let url = document.getElementById('browser-address').value.trim();
             if (!url) return;
             
-            // Add https:// if no protocol specified
-            let fullUrl = url;
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                fullUrl = 'https://' + url;
-            }
+            if (!url.startsWith('http')) url = 'https://' + url;
             
-            try {
-                setBrowserLoading(true);
-                const res = await fetch(`/qaz/portal/${currentProvider}/navigate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: fullUrl })
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    updateAddressBar(data.url);
-                    document.getElementById('browser-page-title').textContent = data.title || 'Untitled';
-                    await refreshScreenshot();
-                }
-            } catch (e) {
-                console.error('Navigation error:', e);
-            } finally {
-                setBrowserLoading(false);
-            }
+            await fetch(`/qaz/portal/${currentProvider}/navigate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
         }
-        
-        async function updateBrowserInfo() {
-            if (!currentProvider) return;
-            try {
-                const res = await fetch(`/qaz/portal/${currentProvider}/info`);
-                const data = await res.json();
-                if (data.status === 'success') {
-                    updateAddressBar(data.url);
-                    document.getElementById('browser-page-title').textContent = data.title || 'Untitled';
-                }
-            } catch (e) {
-                console.error('Update info error:', e);
-            }
-        }
-        
-        function updateAddressBar(url) {
-            if (url) {
-                document.getElementById('browser-address-bar').value = url;
-            }
-        }
-        
-        function setBrowserLoading(loading) {
-            document.getElementById('browser-loading').style.display = loading ? 'block' : 'none';
-            document.getElementById('browser-status').textContent = loading ? 'Loading...' : 'Ready';
-        }
-        
-        // Screenshot Functions
-        async function refreshScreenshot() {
-            if (!currentProvider) return;
-            const img = document.getElementById('browser-screenshot');
-            const timestamp = Date.now();
-            img.src = `/qaz/portal/${currentProvider}/screenshot?t=${timestamp}`;
-        }
-        
-        async function manualScreenshot() {
-            await refreshScreenshot();
-            showBrowserStatus('Screenshot taken');
-        }
-        
-        function showBrowserStatus(message) {
-            document.getElementById('browser-status').textContent = message;
-            setTimeout(() => {
-                document.getElementById('browser-status').textContent = 'Ready';
-            }, 2000);
-        }
-        
-        // Interaction Functions
-        async function handleBrowserClick(event) {
+
+        function handleStreamClick(event) {
             if (!currentProvider) return;
             
-            const img = event.target;
-            const rect = img.getBoundingClientRect();
+            const rect = event.target.getBoundingClientRect();
+            const x = Math.round((event.clientX - rect.left) * (1280 / rect.width));
+            const y = Math.round((event.clientY - rect.top) * (800 / rect.height));
             
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
+            document.getElementById('browser-coords').textContent = `Click: ${x}, ${y}`;
             
-            const scaleX = 1280 / rect.width;
-            const scaleY = 800 / rect.height;
-            
-            const browserX = Math.round(x * scaleX);
-            const browserY = Math.round(y * scaleY);
-            
-            lastClickCoords = { x: browserX, y: browserY };
-            
-            // Show click feedback
-            showClickFeedback(x, y);
-            
-            // Update coords display
-            document.getElementById('browser-coords').textContent = `Clicked: ${browserX}, ${browserY}`;
-            
-            try {
-                await portalAction('click', browserX, browserY);
-            } catch (e) {
-                console.error('Click error:', e);
-            }
+            fetch('/qaz/portal/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: currentProvider,
+                    action: 'click',
+                    x: x,
+                    y: y
+                })
+            });
         }
-        
-        function showClickFeedback(x, y) {
-            const feedback = document.getElementById('click-feedback');
-            feedback.style.left = x + 'px';
-            feedback.style.top = y + 'px';
-            feedback.style.display = 'block';
-            setTimeout(() => {
-                feedback.style.display = 'none';
-            }, 500);
-        }
-        
-        function toggleKeyboardMode() {
-            keyboardActive = !keyboardActive;
-            const btn = document.getElementById('keyboard-toggle-btn');
-            if (keyboardActive) {
-                btn.textContent = '⌨️ Keyboard: ON';
-                btn.style.color = 'var(--success)';
-                btn.style.borderColor = 'var(--success)';
-                document.addEventListener('keydown', handleGlobalKeyDown);
-                showBrowserStatus('Keyboard mode ON - type anywhere');
-            } else {
-                btn.textContent = '⌨️ Keyboard: OFF';
-                btn.style.color = 'var(--text-muted)';
-                btn.style.borderColor = 'var(--border)';
-                document.removeEventListener('keydown', handleGlobalKeyDown);
-                showBrowserStatus('Keyboard mode OFF');
-            }
-        }
-        
-        async function handleGlobalKeyDown(event) {
-            if (!keyboardActive || !currentProvider) return;
-            
-            // Don't capture if typing in an input
-            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
-            
-            const keyMap = {
-                'Enter': 'Enter',
-                'Tab': 'Tab',
-                'Backspace': 'Backspace',
-                'Delete': 'Delete',
-                'ArrowUp': 'ArrowUp',
-                'ArrowDown': 'ArrowDown',
-                'ArrowLeft': 'ArrowLeft',
-                'ArrowRight': 'ArrowRight',
-                'Escape': 'Escape'
-            };
-            
-            if (keyMap[event.key]) {
-                await portalAction('keypress', null, null, keyMap[event.key]);
-            } else if (event.key.length === 1) {
-                // Regular character
-                await portalAction('type', null, null, null, event.key);
-            }
-        }
-        
-        async function portalAction(action, x = null, y = null, key = null, text = null) {
+
+        async function sendMessage() {
             if (!currentProvider) return;
+            const msg = document.getElementById('browser-message').value.trim();
+            if (!msg) return;
             
-            const body = {
-                provider: currentProvider,
-                action: action,
-                x: x,
-                y: y,
-                key: key,
-                text: text
-            };
+            await fetch(`/qaz/portal/${currentProvider}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            });
             
-            try {
-                const res = await fetch('/qaz/portal/action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    // Screenshot is taken automatically by backend
-                    setTimeout(() => refreshScreenshot(), 500);
-                }
-            } catch (e) {
-                console.error('Portal action error:', e);
-            }
+            document.getElementById('browser-message').value = '';
         }
-        
-        async function browserNewChat() {
+
+        function toggleKeyboard() {
+            const osk = document.getElementById('osk');
+            osk.style.display = osk.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // On-Screen Keyboard
+        function oskType(char) {
+            if (char === '123') return; // Switch to numbers (not implemented yet)
+            
+            const input = document.getElementById('browser-message');
+            if (oskShift && char.length === 1 && char.match(/[a-z]/i)) {
+                char = char.toUpperCase();
+            }
+            input.value += char;
+            input.focus();
+        }
+
+        function oskBackspace() {
+            const input = document.getElementById('browser-message');
+            input.value = input.value.slice(0, -1);
+            input.focus();
+        }
+
+        function oskEnter() {
+            sendMessage();
+            document.getElementById('browser-message').focus();
+        }
+
+        function toggleOSKShift() {
+            oskShift = !oskShift;
+            // Visual feedback would go here
+        }
+
+        async function closeBrowser() {
             if (!currentProvider) return;
-            try {
-                await fetch(`/qaz/portal/${currentProvider}/newchat`, { method: 'POST' });
-                setTimeout(() => refreshScreenshot(), 1000);
-                showBrowserStatus('New chat started');
-            } catch (e) {
-                console.error('New chat error:', e);
-            }
-        }
-        
-        async function browserClickCenter() {
-            if (!currentProvider) return;
-            try {
-                await portalAction('click', 640, 350);
-                showBrowserStatus('Clicked center');
-            } catch (e) {
-                console.error('Click center error:', e);
-            }
-        }
-        
-        async function sendBrowserMessage() {
-            if (!currentProvider) return;
+            if (!confirm('Close browser?')) return;
             
-            const input = document.getElementById('browser-message-input');
-            const message = input.value.trim();
+            await fetch(`/qaz/portal/${currentProvider}/close`, { method: 'POST' });
             
-            if (!message) return;
-            
-            try {
-                const res = await fetch(`/qaz/portal/${currentProvider}/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
-                });
-                
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    input.value = '';
-                    showBrowserStatus('Message sent');
-                    setTimeout(() => refreshScreenshot(), 1000);
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-        }
-        
-        async function closeCurrentPortal() {
-            if (!currentProvider) return;
-            
-            if (!confirm(`Close the ${currentProvider} browser?`)) return;
-            
-            try {
-                await fetch(`/qaz/portal/${currentProvider}/close`, { method: 'POST' });
-                
-                document.getElementById('browser-interface').style.display = 'none';
-                document.getElementById('portal-connection-status').textContent = '⚪ Not Connected';
-                document.getElementById('portal-connection-status').style.color = 'var(--text-muted)';
-                document.getElementById('portal-provider-select').value = '';
-                
-                if (screenshotInterval) {
-                    clearInterval(screenshotInterval);
-                    screenshotInterval = null;
-                }
-                
-                currentProvider = null;
-                keyboardActive = false;
-                
-                await checkAllPortalStatus();
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-        }
-        
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            checkAllPortalStatus();
-        });
-        
-        // Legacy Copilot portal functions (for backward compatibility)
-        async function startCopilotPortal() {
-            const btn = document.getElementById('portal-start-btn');
-            btn.disabled = true;
-            btn.textContent = 'Starting...';
-            
-            try {
-                const res = await fetch('/qaz/copilot/portal/start', { method: 'POST' });
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    document.getElementById('portal-controls').style.display = 'block';
-                    document.getElementById('portal-status').textContent = '✅ Portal Active';
-                    document.getElementById('portal-status').style.color = 'var(--success)';
-                    
-                    // Take initial screenshot only (no auto-refresh to save data)
-                    refreshPortalScreenshot();
-                } else {
-                    throw new Error(data.message || 'Failed to start');
-                }
-            } catch (e) {
-                alert('Error starting portal: ' + e.message);
-                btn.disabled = false;
-                btn.textContent = '🚀 Start Browser Portal';
-            }
-        }
-        
-        async function refreshPortalScreenshot() {
-            const img = document.getElementById('portal-screenshot');
-            img.src = '/qaz/copilot/portal/screenshot?t=' + new Date().getTime();
-        }
-        
-        async function sendPortalMessage() {
-            const input = document.getElementById('portal-message-input');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            const btn = document.getElementById('portal-send-btn');
-            btn.disabled = true;
-            btn.textContent = 'Sending...';
-            
-            try {
-                const res = await fetch('/qaz/copilot/portal/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
-                });
-                
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    input.value = '';
-                    document.getElementById('portal-response').textContent = data.response;
-                    document.getElementById('portal-response').style.display = 'block';
-                    
-                    // Refresh screenshot after a delay
-                    setTimeout(refreshPortalScreenshot, 2000);
-                } else {
-                    throw new Error(data.message);
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Send Message';
-            }
-        }
-        
-        async function portalNewChat() {
-            try {
-                await fetch('/qaz/copilot/portal/newchat', { method: 'POST' });
-                setTimeout(refreshPortalScreenshot, 1000);
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-        }
-        
-        async function portalRefresh() {
-            try {
-                await fetch('/qaz/copilot/portal/refresh', { method: 'POST' });
-                setTimeout(refreshPortalScreenshot, 3000);
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-        }
-        
-        async function closePortal() {
-            if (!confirm('Close the browser portal?')) return;
-            
-            try {
-                await fetch('/qaz/copilot/portal/close', { method: 'POST' });
-                
-                document.getElementById('portal-controls').style.display = 'none';
-                document.getElementById('portal-status').textContent = '❌ Portal Closed';
-                document.getElementById('portal-status').style.color = 'var(--text-muted)';
-                document.getElementById('portal-start-btn').disabled = false;
-                document.getElementById('portal-start-btn').textContent = '🚀 Start Browser Portal';
-            } catch (e) {
-                alert('Error: ' + e.message);
-            }
-        }
-        
-        // Allow Enter key to send message
-        document.getElementById('portal-message-input')?.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                sendPortalMessage();
-            }
-        });
-        
-        // Handle screenshot clicks
-        async function handleScreenshotClick(event) {
-            const img = event.target;
-            const rect = img.getBoundingClientRect();
-            
-            // Calculate click coordinates relative to image
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            
-            // Scale to actual browser viewport (1280x800)
-            const scaleX = 1280 / rect.width;
-            const scaleY = 800 / rect.height;
-            
-            const browserX = Math.round(x * scaleX);
-            const browserY = Math.round(y * scaleY);
-            
-            // Show coordinates
-            const coordDiv = document.getElementById('click-coordinates');
-            coordDiv.textContent = `Clicking: (${browserX}, ${browserY})`;
-            coordDiv.style.display = 'block';
-            
-            try {
-                const res = await fetch('/qaz/copilot/portal/click', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ x: browserX, y: browserY })
-                });
-                
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    coordDiv.textContent = `✅ Clicked: (${browserX}, ${browserY})`;
-                    setTimeout(() => {
-                        coordDiv.style.display = 'none';
-                        refreshPortalScreenshot();
-                    }, 1000);
-                } else {
-                    throw new Error(data.message);
-                }
-            } catch (e) {
-                coordDiv.textContent = `❌ Error: ${e.message}`;
-                setTimeout(() => {
-                    coordDiv.style.display = 'none';
-                }, 2000);
-            }
-        }
-        
-        async function clickCaptchaCheckbox() {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = 'Clicking...';
-            
-            try {
-                const res = await fetch('/qaz/copilot/portal/click_checkbox', { method: 'POST' });
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    btn.textContent = '✅ Clicked!';
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = '☑️ Click CAPTCHA Checkbox';
-                        refreshPortalScreenshot();
-                    }, 1000);
-                } else {
-                    throw new Error(data.message);
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-                btn.disabled = false;
-                btn.textContent = '☑️ Click CAPTCHA Checkbox';
-            }
-        }
-        
-        async function clickCaptchaCenter() {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = 'Clicking...';
-            
-            try {
-                // Click center of screen (640, 400)
-                const res = await fetch('/qaz/copilot/portal/click', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ x: 640, y: 400 })
-                });
-                
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    btn.textContent = '✅ Clicked!';
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = '🎯 Click Screen Center';
-                        refreshPortalScreenshot();
-                    }, 1000);
-                } else {
-                    throw new Error(data.message);
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-                btn.disabled = false;
-                btn.textContent = '🎯 Click Screen Center';
-            }
-        }
-    </script>
-    
-    <!-- 🌐 Enhanced Browser Portal with Full Navigation -->
-    <div class="card" style="margin-top: 30px; border: 2px solid var(--accent);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h2 style="color: var(--accent); margin: 0;">🌐 Browser Portal</h2>
-            <span id="portal-connection-status" style="font-size: 12px; color: var(--text-muted);">⚪ Not Connected</span>
-        </div>
-        
-        <!-- Provider Selector -->
-        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-            <select id="portal-provider-select" style="flex: 1; min-width: 200px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; font-size: 14px;" onchange="onProviderChange()">
-                <option value="">Select Provider...</option>
-                <option value="copilot">🤖 Microsoft Copilot</option>
-                <option value="huggingchat">🤗 HuggingChat (Auto-login)</option>
-                <option value="chatgpt">💬 ChatGPT</option>
-                <option value="gemini">✨ Google Gemini</option>
-                <option value="zai">🌟 Z.ai</option>
-            </select>
-            <button id="portal-start-btn" onclick="startPortal()" style="background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                🚀 Start Browser
-            </button>
-            <button onclick="checkAllPortalStatus()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                🔄 Check Status
-            </button>
-        </div>
-        
-        <!-- Active Portals List -->
-        <div id="active-portals-list" style="margin-bottom: 20px;"></div>
-        
-        <!-- Browser Interface (Hidden until started) -->
-        <div id="browser-interface" style="display: none;">
-            <!-- Browser Chrome / Address Bar -->
-            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px 8px 0 0; padding: 10px; display: flex; gap: 8px; align-items: center;">
-                <!-- Navigation Buttons -->
-                <div style="display: flex; gap: 4px;">
-                    <button onclick="browserGoBack()" style="background: transparent; border: none; color: var(--text); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Go Back">
-                        ←
-                    </button>
-                    <button onclick="browserGoForward()" style="background: transparent; border: none; color: var(--text); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Go Forward">
-                        →
-                    </button>
-                    <button onclick="browserRefresh()" style="background: transparent; border: none; color: var(--text); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Refresh">
-                        ↻
-                    </button>
-                </div>
-                
-                <!-- Address Bar -->
-                <div style="flex: 1; display: flex; gap: 8px;">
-                    <input type="text" id="browser-address-bar" placeholder="Enter URL..." 
-                        style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 20px; font-family: monospace; font-size: 13px;"
-                        onkeypress="if(event.key==='Enter')browserNavigate()">
-                    <button onclick="browserNavigate()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 600; cursor: pointer;">
-                        Go
-                    </button>
-                </div>
-                
-                <!-- Page Info -->
-                <button onclick="toggleKeyboardMode()" id="keyboard-toggle-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                    ⌨️ Keyboard: OFF
-                </button>
-                
-                <button onclick="closeCurrentPortal()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 8px 12px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 12px;">
-                    ✕ Close
-                </button>
-            </div>
-            
-            <!-- Page Title Display -->
-            <div id="browser-page-title" style="background: var(--surface); border-left: 1px solid var(--border); border-right: 1px solid var(--border); padding: 8px 15px; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                Loading...
-            </div>
-            
-            <!-- Browser Viewport (Screenshot) -->
-            <div style="background: var(--bg); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; position: relative; overflow: hidden;">
-                <div id="browser-viewport" style="position: relative; cursor: crosshair;">
-                    <img id="browser-screenshot" src="" alt="Browser" 
-                        style="width: 100%; display: block;"
-                        onclick="handleBrowserClick(event)">
-                    
-                    <!-- Click Feedback Overlay -->
-                    <div id="click-feedback" style="position: absolute; width: 20px; height: 20px; border: 2px solid var(--accent); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; display: none;"></div>
-                </div>
-                
-                <!-- Loading Indicator -->
-                <div id="browser-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px 40px; border-radius: 8px; display: none;">
-                    Loading...
-                </div>
-            </div>
-            
-            <!-- Status Bar -->
-            <div style="background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted);">
-                <span id="browser-status">Ready</span>
-                <span id="browser-coords">Click to interact</span>
-            </div>
-            
-            <!-- Quick Actions Bar -->
-            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-                <button onclick="browserNewChat()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
-                    🆕 New Chat
-                </button>
-                <button onclick="browserClickCenter()" style="background: var(--warning); color: black; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
-                    ☑️ Click Center
-                </button>
-                <button onclick="manualScreenshot()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
-                    📸 Screenshot
-                </button>
-            </div>
-            
-            <!-- Message Input -->
-            <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-top: 15px;">
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="browser-message-input" placeholder="Type message and press Enter..." 
-                        style="flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; font-size: 14px;"
-                        onkeypress="if(event.key==='Enter')sendBrowserMessage()">
-                    <button onclick="sendBrowserMessage()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                        Send
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 🌐 Custom Proxy Configuration -->
-    <div class="card" style="margin-top: 30px; border: 2px solid var(--accent);">
-        <h4 style="color: var(--accent); margin-bottom: 10px; display: flex; align-items: center;">
-            🌐 Custom Proxy (Container-wide)
-            <span id="proxy-status-badge" style="font-size: 11px; background: var(--surface); padding: 2px 8px; border-radius: 4px; margin-left: 10px; color: var(--text-muted);">No Proxy</span>
-        </h4>
-        <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 12px;">
-            Set your own proxy IP. Format: <code>ip:port</code> or <code>http://ip:port</code>. Applies to entire container.
-        </p>
-        
-        <div style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
-            <input type="text" id="custom-proxy-input" placeholder="e.g., 192.168.1.1:8080 or http://proxy.example.com:3128" 
-                style="flex: 1; min-width: 250px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 6px; font-family: monospace; font-size: 13px;">
-            <button onclick="setCustomProxy()" style="background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                💾 Set Proxy
-            </button>
-            <button onclick="clearCustomProxy()" style="background: var(--surface); color: var(--error); border: 1px solid var(--error); padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                🗑️ Clear
-            </button>
-            <button onclick="testCustomProxy()" style="background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                ✅ Test
-            </button>
-        </div>
-        
-        <div id="proxy-info" style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 12px; display: none;">
-            <div><strong>Current Proxy:</strong> <span id="current-proxy-display">None</span></div>
-            <div><strong>Status:</strong> <span id="proxy-status-display">-</span></div>
-            <div><strong>Response Time:</strong> <span id="proxy-response-display">-</span></div>
-        </div>
-        
-        <div id="proxy-message" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);"></div>
-    </div>
-    
-    <!-- 🔧 Provider Toggle Management Section -->
-    <div class="card" style="margin-top: 30px;">
-        <h2 style="margin-bottom: 15px;">🔧 Provider Toggle Management</h2>
-        <p style="color: var(--text-muted); margin-bottom: 20px;">
-            Enable or disable providers. Disabled providers won't appear in the dashboard or API responses.
-        </p>
-        
-        <div id="providers-list" style="display: grid; gap: 10px;">
-            <div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading providers...</div>
-        </div>
-    </div>
-    
-    <script>
-        // 🌐 Custom Proxy Management Functions
-        async function setCustomProxy() {
-            const input = document.getElementById('custom-proxy-input');
-            const proxy = input.value.trim();
-            
-            if (!proxy) {
-                alert('Please enter a proxy address');
-                return;
+            if (streamInterval) {
+                clearInterval(streamInterval);
+                streamInterval = null;
             }
             
-            try {
-                const res = await fetch('/qaz/proxy/set', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy: proxy })
-                });
-                
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    showProxyMessage(`✅ Proxy set: ${proxy}`);
-                    await loadProxyStatus();
-                } else {
-                    throw new Error(data.message);
-                }
-            } catch (e) {
-                showProxyMessage('❌ Error: ' + e.message);
-            }
-        }
-        
-        async function clearCustomProxy() {
-            if (!confirm('Clear the custom proxy?')) return;
+            document.getElementById('browser-interface').style.display = 'none';
+            document.getElementById('browser-status-dot').classList.remove('connected', 'streaming');
+            document.getElementById('browser-status-text').textContent = 'Offline';
+            document.getElementById('osk').style.display = 'none';
+            currentProvider = null;
             
-            try {
-                const res = await fetch('/qaz/proxy/clear', { method: 'POST' });
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    document.getElementById('custom-proxy-input').value = '';
-                    showProxyMessage('✅ Proxy cleared');
-                    await loadProxyStatus();
-                }
-            } catch (e) {
-                showProxyMessage('❌ Error: ' + e.message);
-            }
+            checkBrowserStatus();
         }
-        
-        async function testCustomProxy() {
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = 'Testing...';
-            btn.disabled = true;
-            
-            try {
-                const res = await fetch('/qaz/proxy/test', { method: 'POST' });
-                const data = await res.json();
-                
-                if (data.is_working) {
-                    document.getElementById('proxy-status-badge').textContent = 'Working';
-                    document.getElementById('proxy-status-badge').style.color = 'var(--success)';
-                    showProxyMessage(`✅ Proxy working! Response time: ${data.response_time}`);
-                } else {
-                    document.getElementById('proxy-status-badge').textContent = 'Not Working';
-                    document.getElementById('proxy-status-badge').style.color = 'var(--error)';
-                    showProxyMessage('❌ Proxy not working. Check your settings.');
-                }
-            } catch (e) {
-                showProxyMessage('❌ Error: ' + e.message);
-            } finally {
-                btn.textContent = originalText;
-                btn.disabled = false;
-            }
-        }
-        
-        async function loadProxyStatus() {
-            try {
-                const res = await fetch('/qaz/proxy/status');
-                const data = await res.json();
-                
-                if (data.enabled) {
-                    document.getElementById('proxy-status-badge').textContent = 'Active';
-                    document.getElementById('proxy-status-badge').style.color = 'var(--success)';
-                    document.getElementById('current-proxy-display').textContent = data.proxy;
-                    document.getElementById('proxy-status-display').textContent = data.is_working ? 'Working' : 'Not Tested';
-                    document.getElementById('proxy-response-display').textContent = data.response_time || '-';
-                    document.getElementById('proxy-info').style.display = 'block';
-                    document.getElementById('custom-proxy-input').value = data.proxy;
-                } else {
-                    document.getElementById('proxy-status-badge').textContent = 'No Proxy';
-                    document.getElementById('proxy-status-badge').style.color = 'var(--text-muted)';
-                    document.getElementById('proxy-info').style.display = 'none';
-                }
-            } catch (e) {
-                console.error('Failed to load proxy status:', e);
-            }
-        }
-        
-        function showProxyMessage(msg) {
-            const el = document.getElementById('proxy-message');
-            el.textContent = msg;
-            el.style.color = msg.startsWith('✅') ? 'var(--success)' : 'var(--error)';
-            setTimeout(() => {
-                el.textContent = '';
-            }, 5000);
-        }
-        
-        // 🔧 Provider Toggle Functions
+
+        // Provider Toggles
         async function loadProviders() {
             try {
                 const res = await fetch('/qaz/providers');
                 const data = await res.json();
                 
                 const container = document.getElementById('providers-list');
-                
-                if (!data.providers || data.providers.length === 0) {
-                    container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No providers found</div>';
-                    return;
-                }
-                
-                container.innerHTML = data.providers.map(provider => `
-                    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
-                        <div>
-                            <div style="font-weight: 600; color: white;">${provider.name}</div>
-                            <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">${provider.type} • ID: ${provider.id}</div>
+                container.innerHTML = data.providers.map(p => `
+                    <div class="provider-card">
+                        <div class="provider-info">
+                            <h3>${p.name}</h3>
+                            <span>${p.type}</span>
                         </div>
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" 
-                                ${provider.enabled ? 'checked' : ''} 
-                                onchange="toggleProvider('${provider.id}', this.checked)"
-                                style="width: 50px; height: 26px; appearance: none; background: ${provider.enabled ? 'var(--success)' : 'var(--border)'}; border-radius: 13px; position: relative; cursor: pointer; transition: background 0.3s;">
-                            <span style="margin-left: 10px; font-size: 12px; color: var(--text-muted);">${provider.enabled ? 'Enabled' : 'Disabled'}</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="toggleProvider('${p.id}', this.checked)">
+                            <span class="toggle-slider"></span>
                         </label>
                     </div>
                 `).join('');
-                
             } catch (e) {
                 console.error('Failed to load providers:', e);
-                document.getElementById('providers-list').innerHTML = 
-                    `<div style="text-align: center; padding: 20px; color: var(--error);">Error loading providers: ${e.message}</div>`;
             }
         }
-        
-        async function toggleProvider(providerId, enabled) {
+
+        async function toggleProvider(id, enabled) {
             try {
-                const res = await fetch('/qaz/providers/toggle', {
+                await fetch('/qaz/providers/toggle', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider_id: providerId, enabled: enabled })
+                    body: JSON.stringify({ provider_id: id, enabled })
                 });
-                
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    // Refresh the list to show updated state
-                    await loadProviders();
-                } else {
-                    throw new Error(data.message);
-                }
             } catch (e) {
                 alert('Error: ' + e.message);
-                // Refresh to get correct state
-                await loadProviders();
+                loadProviders();
             }
         }
-        
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            loadProviders();
-            loadProxyStatus();
-        });
+
+        // Proxy
+        async function setProxy() {
+            const proxy = document.getElementById('proxy-input').value.trim();
+            if (!proxy) return;
+            
+            try {
+                await fetch('/qaz/proxy/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ proxy })
+                });
+                loadProxyStatus();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function clearProxy() {
+            await fetch('/qaz/proxy/clear', { method: 'POST' });
+            document.getElementById('proxy-input').value = '';
+            document.getElementById('proxy-status').style.display = 'none';
+        }
+
+        async function loadProxyStatus() {
+            try {
+                const res = await fetch('/qaz/proxy/status');
+                const data = await res.json();
+                
+                if (data.enabled) {
+                    document.getElementById('proxy-input').value = data.proxy;
+                    document.getElementById('proxy-status').style.display = 'block';
+                    document.getElementById('proxy-status').textContent = `Proxy: ${data.proxy} | Status: ${data.is_working ? 'Working' : 'Not tested'}`;
+                }
+            } catch (e) {
+                console.error('Failed to load proxy status:', e);
+            }
+        }
+
+        // Admin Actions
+        async function testAllAI() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Testing...';
+            
+            try {
+                const res = await fetch('/qaz/test_all', { method: 'POST' });
+                const results = await res.json();
+                const passed = results.filter(r => r.status === 'PASS').length;
+                alert(`Tests Complete\nPassed: ${passed}/${results.length}`);
+            } catch (e) {
+                alert('Test failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧪 Test';
+            }
+        }
+
+        async function clearStats() {
+            if (!confirm('Clear all statistics?')) return;
+            
+            try {
+                await fetch('/qaz/clear_stats', { method: 'POST' });
+                alert('Statistics cleared');
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // Switch to existing browser
+        async function switchToBrowser(provider) {
+            currentProvider = provider;
+            document.getElementById('portal-provider-select').value = provider;
+            showBrowserInterface();
+            startStream();
+        }
     </script>
 </body>
-
 </html>

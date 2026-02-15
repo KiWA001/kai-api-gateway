@@ -488,10 +488,12 @@ async def start_unified_portal(req: PortalProviderRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/portal/{provider}/screenshot")
-async def get_unified_portal_screenshot(provider: str):
-    """Get screenshot from any provider portal."""
+async def get_unified_portal_screenshot(provider: str, quality: float = 1.0, format: str = "png"):
+    """Get screenshot from any provider portal with optional quality/compression."""
     import os
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, StreamingResponse
+    from PIL import Image
+    import io
     
     try:
         from browser_portal import get_portal_manager, PortalProvider
@@ -507,7 +509,100 @@ async def get_unified_portal_screenshot(provider: str):
         if not os.path.exists(portal.screenshot_path):
             raise HTTPException(status_code=404, detail="Screenshot not available")
         
-        return FileResponse(portal.screenshot_path, media_type="image/png")
+        # If quality is 1.0 and format is png, return as-is
+        if quality >= 1.0 and format == "png":
+            return FileResponse(portal.screenshot_path, media_type="image/png")
+        
+        # Otherwise, compress/process the image
+        img = Image.open(portal.screenshot_path)
+        
+        # Resize if quality < 1.0
+        if quality < 1.0:
+            new_size = (int(img.width * quality), int(img.height * quality))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        # Convert to desired format
+        img_io = io.BytesIO()
+        if format == "jpeg" or format == "jpg":
+            img = img.convert("RGB")
+            img.save(img_io, format="JPEG", quality=int(quality * 100) if quality < 1 else 85)
+            media_type = "image/jpeg"
+        else:
+            img.save(img_io, format="PNG")
+            media_type = "image/png"
+        
+        img_io.seek(0)
+        return StreamingResponse(img_io, media_type=media_type)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# MJPEG Streaming endpoint for video-like experience
+@router.get("/portal/{provider}/stream")
+async def stream_portal_video(provider: str, quality: float = 0.5, fps: int = 2):
+    """Stream the portal as MJPEG for video-like experience."""
+    import os
+    import asyncio
+    from fastapi.responses import StreamingResponse
+    from PIL import Image
+    import io
+    
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running")
+        
+        async def generate_frames():
+            """Generate MJPEG stream."""
+            frame_delay = 1.0 / fps
+            
+            while portal.is_running():
+                try:
+                    # Take screenshot
+                    await portal.take_screenshot()
+                    
+                    if os.path.exists(portal.screenshot_path):
+                        # Process image
+                        img = Image.open(portal.screenshot_path)
+                        
+                        if quality < 1.0:
+                            new_size = (int(img.width * quality), int(img.height * quality))
+                            img = img.resize(new_size, Image.Resampling.LANCZOS)
+                        
+                        # Convert to JPEG for smaller size
+                        img = img.convert("RGB")
+                        img_io = io.BytesIO()
+                        img.save(img_io, format="JPEG", quality=70)
+                        img_io.seek(0)
+                        
+                        frame_data = img_io.getvalue()
+                        
+                        # Yield MJPEG frame
+                        yield (
+                            b'--frame\r\n'
+                            b'Content-Type: image/jpeg\r\n'
+                            b'Content-Length: ' + str(len(frame_data)).encode() + b'\r\n'
+                            b'\r\n' + frame_data + b'\r\n'
+                        )
+                    
+                    await asyncio.sleep(frame_delay)
+                    
+                except Exception as e:
+                    print(f"Stream error: {e}")
+                    await asyncio.sleep(frame_delay)
+        
+        return StreamingResponse(
+            generate_frames(),
+            media_type="multipart/x-mixed-replace;boundary=frame"
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
