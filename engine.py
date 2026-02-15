@@ -97,6 +97,15 @@ class AIEngine:
                 self._valid_provider_models.add(m)
                 self._valid_provider_models.add(f"{p_name}/{m}")
 
+        # Load System Prompt ONCE
+        self.system_prompt_template = ""
+        try:
+            with open("system_prompt.md", "r") as f:
+                self.system_prompt_template = f.read()
+            logger.info("✅ Global System Prompt loaded")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to load system_prompt.md (will use raw prompt): {e}")
+
     def _load_stats(self):
         """Load persistent stats from Supabase."""
         if not self.supabase:
@@ -376,21 +385,16 @@ class AIEngine:
         enabled_providers = state_manager.get_enabled_provider_ids()
         
         # --- GLOBAL SYSTEM PROMPT INJECTION ---
-        try:
-            with open("system_prompt.md", "r") as f:
-                template = f.read()
+        if self.system_prompt_template:
+            try:
                 # If the template contains {prompt}, use it for formatting
-                if "{prompt}" in template:
-                    prompt = template.format(prompt=prompt)
+                if "{prompt}" in self.system_prompt_template:
+                    prompt = self.system_prompt_template.format(prompt=prompt)
                 else:
                     # Fallback: Prepend if no placeholder key
-                    prompt = f"{template}\n\nUser message:\n{prompt}"
-            
-            # DEBUG LOGGING (Temporary)
-            # logger.info(f"--- FINAL PROMPT SENT TO PROVIDER ---\n{prompt}\n---------------------------------------")
-            
-        except Exception as e:
-            logger.warning(f"Failed to load system_prompt.md: {e}")
+                    prompt = f"{self.system_prompt_template}\n\nUser message:\n{prompt}"
+            except Exception as e:
+                logger.warning(f"Failed to format system prompt: {e}")
         # -------------------------------------
         
         # Build valid sets from enabled providers only
