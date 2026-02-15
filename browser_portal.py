@@ -126,7 +126,7 @@ class BrowserPortal:
             
             self.playwright = await async_playwright().start()
             
-            # Maximum stealth args
+            # Maximum stealth args with audio support
             args = [
                 "--disable-blink-features=AutomationControlled",
                 "--disable-features=IsolateOrigins,site-per-process",
@@ -147,6 +147,12 @@ class BrowserPortal:
                 "--no-default-browser-check",
                 "--password-store=basic",
                 "--use-mock-keychain",
+                # Audio support
+                "--autoplay-policy=no-user-gesture-required",
+                "--use-fake-ui-for-media-stream",
+                "--use-fake-device-for-media-stream",
+                "--enable-features=AudioServiceOutOfProcess",
+                "--disable-features=AudioServiceSandbox",
             ]
             
             # Build browser launch options
@@ -161,7 +167,7 @@ class BrowserPortal:
             
             self.browser = await self.playwright.chromium.launch(**launch_options)
             
-            # Use a real Chrome user agent
+            # Use a real Chrome user agent with audio permissions
             self.context = await self.browser.new_context(
                 viewport=self.config.viewport,
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -169,7 +175,7 @@ class BrowserPortal:
                 timezone_id="America/New_York",
                 color_scheme="light",
                 geolocation={"latitude": 40.7128, "longitude": -74.0060},
-                permissions=["geolocation"],
+                permissions=["geolocation", "microphone", "camera"],
                 java_script_enabled=True,
                 has_touch=False,
                 is_mobile=False,
@@ -253,6 +259,32 @@ class BrowserPortal:
                         return 'Intel Iris OpenGL Engine';
                     }
                     return getParameter.call(this, parameter);
+                };
+                
+                // Audio Context support for audio captchas
+                if (window.AudioContext || window.webkitAudioContext) {
+                    const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+                    window.AudioContext = function() {
+                        const instance = new OriginalAudioContext();
+                        // Ensure destination is properly connected
+                        if (instance.destination) {
+                            Object.defineProperty(instance.destination, 'maxChannelCount', {
+                                get: () => 2
+                            });
+                        }
+                        return instance;
+                    };
+                    window.AudioContext.prototype = OriginalAudioContext.prototype;
+                    if (window.webkitAudioContext) {
+                        window.webkitAudioContext = window.AudioContext;
+                    }
+                }
+                
+                // Allow audio autoplay
+                const originalAudioPlay = HTMLMediaElement.prototype.play;
+                HTMLMediaElement.prototype.play = function() {
+                    this.muted = false;
+                    return originalAudioPlay.apply(this, arguments);
                 };
             """)
             
