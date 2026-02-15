@@ -797,8 +797,7 @@
 
                 <!-- Video Stream -->
                 <div class="browser-stream-container">
-                    <img id="browser-stream" class="browser-stream" src="" alt="Browser Stream">
-                    <div class="browser-overlay" id="browser-overlay" onclick="handleStreamClick(event)"></div>
+                    <img id="browser-stream" class="browser-stream" src="" alt="Browser Stream" onclick="handleStreamClick(event)" style="cursor: crosshair;">
                     
                     <div class="browser-loading" id="browser-loading" style="display:none;">
                         <div class="spinner"></div>
@@ -1090,18 +1089,32 @@
             
             const img = document.getElementById('browser-stream');
             const quality = streamQuality === 'low' ? 0.5 : streamQuality === 'medium' ? 0.75 : 1;
+            let frameCount = 0;
             
-            // MJPEG stream approach
+            // Preload image to prevent flickering
             const updateFrame = () => {
                 if (!currentProvider) return;
-                img.src = `/qaz/portal/${currentProvider}/screenshot?t=${Date.now()}&quality=${quality}`;
+                
+                const newSrc = `/qaz/portal/${currentProvider}/screenshot?t=${Date.now()}&quality=${quality}&frame=${frameCount++}`;
+                
+                // Create a new image to preload
+                const preloadImg = new Image();
+                preloadImg.onload = () => {
+                    // Only update src after image is loaded
+                    img.src = newSrc;
+                };
+                preloadImg.onerror = () => {
+                    console.error('Failed to load screenshot');
+                };
+                preloadImg.src = newSrc;
             };
             
-            // Update every 500ms for smooth video-like experience
-            streamInterval = setInterval(updateFrame, 500);
+            // Update every 1000ms (1 second) for better performance
+            streamInterval = setInterval(updateFrame, 1000);
             updateFrame();
             
             document.getElementById('browser-status-dot').classList.add('streaming');
+            console.log('Stream started for provider:', currentProvider);
         }
 
         function setStreamQuality(quality) {
@@ -1146,14 +1159,40 @@
         }
 
         function handleStreamClick(event) {
-            if (!currentProvider) return;
+            if (!currentProvider) {
+                console.log('No provider selected');
+                return;
+            }
             
             const rect = event.target.getBoundingClientRect();
-            const x = Math.round((event.clientX - rect.left) * (1280 / rect.width));
-            const y = Math.round((event.clientY - rect.top) * (800 / rect.height));
+            const scaleX = 1280 / rect.width;
+            const scaleY = 800 / rect.height;
+            const x = Math.round((event.clientX - rect.left) * scaleX);
+            const y = Math.round((event.clientY - rect.top) * scaleY);
             
+            console.log(`Click at ${x}, ${y} on ${currentProvider}`);
             document.getElementById('browser-coords').textContent = `Click: ${x}, ${y}`;
             
+            // Visual feedback
+            const img = event.target;
+            const feedback = document.createElement('div');
+            feedback.style.cssText = `
+                position: absolute;
+                left: ${event.clientX - rect.left}px;
+                top: ${event.clientY - rect.top}px;
+                width: 20px;
+                height: 20px;
+                border: 3px solid var(--accent);
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                z-index: 100;
+                animation: pulse 0.5s ease-out;
+            `;
+            img.parentElement.appendChild(feedback);
+            setTimeout(() => feedback.remove(), 500);
+            
+            // Send click to backend
             fetch('/qaz/portal/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1163,6 +1202,14 @@
                     x: x,
                     y: y
                 })
+            }).then(res => {
+                if (!res.ok) {
+                    console.error('Click failed:', res.status);
+                } else {
+                    console.log('Click sent successfully');
+                }
+            }).catch(err => {
+                console.error('Click error:', err);
             });
         }
 
