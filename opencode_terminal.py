@@ -108,7 +108,7 @@ class OpenCodeTerminalPortal:
             env['OPENCODE_CONFIG'] = os.path.abspath(self.config.config_path)
             
             self.process = subprocess.Popen(
-                ['npx', 'opencode-ai'],
+                ['npx', '-y', 'opencode-ai'],
                 cwd=self.config.project_dir,
                 env=env,
                 stdin=subprocess.PIPE,

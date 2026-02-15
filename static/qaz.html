@@ -1155,6 +1155,16 @@
                 body: JSON.stringify({ model })
             });
 
+            if (!res.ok) {
+                const text = await res.text();
+                try {
+                    const err = JSON.parse(text);
+                    throw new Error(err.detail || err.message || 'Unknown error');
+                } catch (e) {
+                    throw new Error(`Failed to start terminal: ${res.status} ${res.statusText}`);
+                }
+            }
+
             const data = await res.json();
             if (data.status === 'success' || data.status === 'already_running') {
                 currentProvider = provider;

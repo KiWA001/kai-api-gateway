@@ -21,6 +21,7 @@ from providers.gemini_provider import GeminiProvider
 from providers.zai_provider import ZaiProvider
 from providers.huggingchat_provider import HuggingChatProvider
 from providers.copilot_provider import CopilotProvider
+from providers.opencode_provider import OpenCodeProvider
 from config import MODEL_RANKING, PROVIDER_MODELS, SUPABASE_URL, SUPABASE_KEY
 from models import ModelInfo
 from sanitizer import sanitize_response
@@ -49,6 +50,7 @@ class AIEngine:
         self._providers: dict[str, BaseProvider] = {
             "g4f": G4FProvider(),
             "pollinations": PollinationsProvider(),
+            "opencode": OpenCodeProvider(),
         }
         # Z.ai requires Playwright + Chromium (not available on Vercel serverless)
         if ZaiProvider.is_available():
