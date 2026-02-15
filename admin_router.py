@@ -1160,6 +1160,27 @@ async def list_proxies():
         logger.error(f"Failed to list proxies: {e}")
         return {"proxies": []}
 
+@router.post("/terminal/sync-auth")
+async def sync_terminal_auth(req: dict):
+    """Sync OpenCode auth to Supabase."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        manager = get_terminal_manager()
+        # Just use the default model to get an instance
+        portal = manager.get_portal("opencode-kimi-k2.5-free") 
+        success = await portal.sync_auth()
+        
+        if success:
+            return {"status": "success", "message": "Auth synced to Supabase"}
+        else:
+            return {"status": "error", "message": "Failed to sync auth (check logs)"}
+            
+    except Exception as e:
+        logger.error(f"Error syncing auth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/proxies")
 async def create_proxy(req: ProxyCreateRequest):
     """Add a new proxy to Supabase."""

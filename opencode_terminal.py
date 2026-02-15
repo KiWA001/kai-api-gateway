@@ -74,6 +74,9 @@ class OpenCodeTerminalPortal:
             return
             
         try:
+            # Restore auth from Supabase if available
+            await self.restore_auth()
+            
             logger.info(f"🚀 Starting OpenCode terminal with model: {self.config.model}")
             
             # Ensure config directory exists
@@ -100,8 +103,33 @@ class OpenCodeTerminalPortal:
                 "autoupdate": True
             }
             
-            with open(self.config.config_path, 'w') as f:
-                json.dump(config_data, f, indent=2)
+            # Create config file for this model ONLY if it doesn't exist
+            # This allows the user to run `npx opencode-ai` manually to login/auth
+            if not os.path.exists(self.config.config_path):
+                config_data = {
+                    "$schema": "https://opencode.ai/config.json",
+                    "theme": "opencode",
+                    "provider": {
+                        "opencode-zen": {
+                            "npm": "@ai-sdk/openai-compatible",
+                            "options": {
+                                "baseURL": "https://opencode.ai/zen/v1"
+                            },
+                            "models": {
+                                model: {"name": info["name"]} 
+                                for model, info in OPENCODE_MODELS.items()
+                            }
+                        }
+                    },
+                    "model": f"opencode-zen/{self.config.model}",
+                    "autoshare": False,
+                    "autoupdate": True
+                }
+                
+                with open(self.config.config_path, 'w') as f:
+                    json.dump(config_data, f, indent=2)
+            else:
+                logger.info(f"Using existing config at {self.config.config_path}")
             
             # Start OpenCode process
             env = os.environ.copy()
@@ -285,6 +313,70 @@ class OpenCodeTerminalPortal:
             
         except Exception as e:
             logger.error(f"Error closing OpenCode: {e}")
+
+    async def restore_auth(self):
+        """Restore auth token from Supabase."""
+        try:
+            from db import get_supabase
+            supabase = get_supabase()
+            if not supabase:
+                return
+
+            # Check if we have auth data in Supabase
+            res = supabase.table("kaiapi_settings").select("value").eq("key", "opencode_auth").execute()
+            if not res.data:
+                return
+
+            auth_data = res.data[0]["value"]
+            
+            # Paths to check/restore
+            paths = [
+                os.path.expanduser("~/.local/share/opencode/auth.json"),
+                # Fallback paths if needed
+            ]
+            
+            for path in paths:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, 'w') as f:
+                    json.dump(auth_data, f, indent=2)
+            
+            logger.info("✅ Restored OpenCode auth from Supabase")
+            
+        except Exception as e:
+            logger.warning(f"Failed to restore auth from Supabase: {e}")
+
+    async def sync_auth(self):
+        """Sync local auth token to Supabase."""
+        try:
+            from db import get_supabase
+            supabase = get_supabase()
+            if not supabase:
+                logger.error("Supabase not configured, cannot sync auth")
+                return False
+
+            # Find auth file
+            auth_path = os.path.expanduser("~/.local/share/opencode/auth.json")
+            if not os.path.exists(auth_path):
+                logger.warning(f"Auth file not found at {auth_path}")
+                return False
+                
+            with open(auth_path, 'r') as f:
+                auth_data = json.load(f)
+                
+            # Save to Supabase
+            supabase.table("kaiapi_settings").upsert({
+                "key": "opencode_auth",
+                "value": auth_data,
+                "updated_at": datetime.now().isoformat()
+            }).execute()
+            
+            logger.info("✅ Synced OpenCode auth to Supabase")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to sync auth to Supabase: {e}")
+            return False
+
 
 
 class TerminalPortalManager:

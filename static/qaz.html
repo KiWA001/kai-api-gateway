@@ -828,6 +828,8 @@
                         <button class="quality-btn" onclick="setStreamQuality('high')" id="quality-high">High</button>
                     </div>
 
+                    <button class="btn btn-secondary" id="terminal-sync-btn" onclick="syncTerminalAuth()"
+                        style="display:none;margin-right:8px;" title="Save login to Supabase">Sync Auth</button>
                     <button class="btn btn-danger btn-icon" onclick="closeBrowser()">✕</button>
                 </div>
 
@@ -1144,6 +1146,22 @@
             }
         }
 
+        function showBrowserInterface() {
+            document.getElementById('browser-interface').style.display = 'block';
+            document.getElementById('browser-status-dot').classList.add('connected');
+            document.getElementById('browser-status-text').textContent = 'Browser Active';
+
+            // Show image stream, hide terminal
+            document.getElementById('browser-stream').style.display = 'block';
+            document.getElementById('terminal-view').style.display = 'none';
+
+            // Reset controls
+            document.querySelector('.browser-address-bar').style.visibility = 'visible';
+            document.querySelector('.quality-selector').style.visibility = 'visible';
+            document.getElementById('terminal-sync-btn').style.display = 'none'; // Ensure hidden
+            document.getElementById('browser-page-title').textContent = 'Ready';
+        }
+
         async function startTerminalPortal(provider) {
             // provider is 'opencode', but backend expects model name
             // For now, hardcode to default free model or get from select if we expand logic
@@ -1188,8 +1206,34 @@
             // Update controls for terminal
             document.querySelector('.browser-address-bar').style.visibility = 'hidden';
             document.querySelector('.quality-selector').style.visibility = 'hidden';
+            document.getElementById('terminal-sync-btn').style.display = 'inline-block';
             document.getElementById('browser-page-title').textContent = 'OpenCode Terminal';
             document.getElementById('browser-coords').textContent = 'Type commands below';
+        }
+
+        async function syncTerminalAuth() {
+            const btn = document.getElementById('terminal-sync-btn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Syncing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/qaz/terminal/sync-auth', { method: 'POST', body: '{}' });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    btn.textContent = 'Synced!';
+                    setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+                } else {
+                    alert('Sync failed: ' + data.message);
+                    btn.textContent = 'Error';
+                    setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+                }
+            } catch (e) {
+                alert('Sync error: ' + e);
+                btn.textContent = 'Error';
+                setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
+            }
         }
 
         function startTerminalStream(model) {
