@@ -73,10 +73,10 @@ def update_usage_stats(key_id: str, tokens: int):
     supabase = get_supabase()
     if supabase and tokens > 0:
         try:
-            current = supabase.table("api_keys").select("usage_tokens").eq("id", key_id).execute()
+            current = supabase.table("KAIAPI_api_keys").select("usage_tokens").eq("id", key_id).execute()
             if current.data:
                 new_total = (current.data[0]['usage_tokens'] or 0) + tokens
-                supabase.table("api_keys").update({"usage_tokens": new_total}).eq("id", key_id).execute()
+                supabase.table("KAIAPI_api_keys").update({"usage_tokens": new_total}).eq("id", key_id).execute()
                 
         except Exception as e:
             print(f"Failed to update usage for {key_id}: {e}")

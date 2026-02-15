@@ -2,6 +2,7 @@
 Provider State Manager
 ----------------------
 Manages enabled/disabled state of providers with Supabase persistence.
+Uses KAIAPI_ prefixed table names for multi-project organization.
 """
 
 import logging
@@ -10,6 +11,9 @@ from db import get_supabase
 from config import PROVIDERS
 
 logger = logging.getLogger("kai_api.provider_state")
+
+# Table name with KAIAPI_ prefix
+TABLE_NAME = "KAIAPI_provider_states"
 
 class ProviderStateManager:
     """Manages provider enable/disable state with Supabase persistence."""
@@ -27,8 +31,8 @@ class ProviderStateManager:
         
         if supabase:
             try:
-                # Try to load from Supabase
-                res = supabase.table("provider_states").select("*").execute()
+                # Try to load from Supabase (using KAIAPI_ prefixed table)
+                res = supabase.table(TABLE_NAME).select("*").execute()
                 
                 if res.data:
                     # Load existing states
@@ -61,7 +65,7 @@ class ProviderStateManager:
             self._providers[provider_id] = config.copy()
             
             try:
-                supabase.table("provider_states").insert({
+                supabase.table(TABLE_NAME).insert({
                     "provider_id": provider_id,
                     "enabled": config["enabled"],
                     "name": config["name"],
@@ -106,16 +110,16 @@ class ProviderStateManager:
         if supabase:
             try:
                 # Check if row exists
-                res = supabase.table("provider_states").select("id").eq("provider_id", provider_id).execute()
+                res = supabase.table(TABLE_NAME).select("id").eq("provider_id", provider_id).execute()
                 
                 if res.data:
                     # Update existing
-                    supabase.table("provider_states").update({
+                    supabase.table(TABLE_NAME).update({
                         "enabled": enabled
                     }).eq("provider_id", provider_id).execute()
                 else:
                     # Insert new
-                    supabase.table("provider_states").insert({
+                    supabase.table(TABLE_NAME).insert({
                         "provider_id": provider_id,
                         "enabled": enabled,
                         "name": self._providers[provider_id]["name"],

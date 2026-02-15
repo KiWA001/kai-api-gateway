@@ -84,7 +84,7 @@ async def verify_api_key(
         if not supabase:
              raise HTTPException(status_code=503, detail="Service unavailable")
              
-        res = supabase.table("api_keys").select("*").eq("token", token).execute()
+        res = supabase.table("KAIAPI_api_keys").select("*").eq("token", token).execute()
         if not res.data:
             return None
         return res.data[0]

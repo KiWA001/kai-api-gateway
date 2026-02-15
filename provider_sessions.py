@@ -62,7 +62,7 @@ class ProviderSessionManager:
             return None
         
         try:
-            response = self.supabase.table("provider_sessions").select("*").eq("provider", provider).execute()
+            response = self.supabase.table("KAIAPI_provider_sessions").select("*").eq("provider", provider).execute()
             
             if not response.data:
                 return None
@@ -166,7 +166,7 @@ class ProviderSessionManager:
             return False
         
         try:
-            self.supabase.table("provider_sessions").delete().eq("provider", provider).execute()
+            self.supabase.table("KAIAPI_provider_sessions").delete().eq("provider", provider).execute()
             logger.info(f"Deleted session for {provider}")
             return True
         except Exception as e:
@@ -181,7 +181,7 @@ class ProviderSessionManager:
             return False
         
         try:
-            self.supabase.table("provider_sessions").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+            self.supabase.table("KAIAPI_provider_sessions").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
             logger.info("Cleared all provider sessions")
             return True
         except Exception as e:
@@ -196,7 +196,7 @@ class ProviderSessionManager:
             return []
         
         try:
-            response = self.supabase.table("provider_sessions").select("*").execute()
+            response = self.supabase.table("KAIAPI_provider_sessions").select("*").execute()
             return response.data
         except Exception as e:
             logger.error(f"Failed to get all sessions: {e}")
