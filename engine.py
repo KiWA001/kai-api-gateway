@@ -385,6 +385,10 @@ class AIEngine:
                 else:
                     # Fallback: Prepend if no placeholder key
                     prompt = f"{template}\n\nUser message:\n{prompt}"
+            
+            # DEBUG LOGGING (Temporary)
+            # logger.info(f"--- FINAL PROMPT SENT TO PROVIDER ---\n{prompt}\n---------------------------------------")
+            
         except Exception as e:
             logger.warning(f"Failed to load system_prompt.md: {e}")
         # -------------------------------------
