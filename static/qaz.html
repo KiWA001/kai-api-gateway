@@ -587,10 +587,11 @@
             }
         });
         
-        // Multi-Provider Browser Portal System
+        // Enhanced Browser Portal System
         let currentProvider = null;
         let keyboardActive = false;
         let lastClickCoords = { x: 640, y: 400 };
+        let screenshotInterval = null;
         
         async function checkAllPortalStatus() {
             try {
@@ -605,7 +606,7 @@
                     if (activeProviders.length > 0) {
                         listDiv.innerHTML = `
                             <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
-                                <strong style="color: var(--success);">✅ Active Portals:</strong>
+                                <strong style="color: var(--success);">✅ Active Browsers:</strong>
                                 <div style="display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;">
                                     ${activeProviders.map(p => `
                                         <button onclick="switchToProvider('${p.provider}')" 
@@ -617,7 +618,7 @@
                             </div>
                         `;
                     } else {
-                        listDiv.innerHTML = '<span style="color: var(--text-muted);">No active portals</span>';
+                        listDiv.innerHTML = '<span style="color: var(--text-muted);">No active browsers</span>';
                     }
                 }
             } catch (e) {
@@ -653,35 +654,166 @@
                 
                 if (data.status === 'success' || data.status === 'already_running') {
                     currentProvider = provider;
-                    showPortalInterface(provider, data.name);
-                    await takePortalScreenshot();
+                    showBrowserInterface(provider, data.name);
+                    await updateBrowserInfo();
+                    await refreshScreenshot();
                     await checkAllPortalStatus();
                 } else {
                     throw new Error(data.message || 'Failed to start');
                 }
             } catch (e) {
-                alert('Error starting portal: ' + e.message);
+                alert('Error starting browser: ' + e.message);
             } finally {
                 btn.disabled = false;
-                btn.textContent = '🚀 Start Portal';
+                btn.textContent = '🚀 Start Browser';
             }
         }
         
-        function showPortalInterface(provider, name) {
-            document.getElementById('portal-interface').style.display = 'block';
-            document.getElementById('current-portal-status').textContent = `✅ ${name || provider} Portal Active`;
+        function showBrowserInterface(provider, name) {
+            document.getElementById('browser-interface').style.display = 'block';
+            document.getElementById('portal-connection-status').textContent = '🟢 Connected';
+            document.getElementById('portal-connection-status').style.color = 'var(--success)';
             document.getElementById('portal-provider-select').value = provider;
+            
+            // Start periodic screenshot updates (every 3 seconds when visible)
+            if (screenshotInterval) clearInterval(screenshotInterval);
+            screenshotInterval = setInterval(refreshScreenshot, 3000);
         }
         
         async function switchToProvider(provider) {
             currentProvider = provider;
             document.getElementById('portal-provider-select').value = provider;
-            showPortalInterface(provider, provider);
-            await takePortalScreenshot();
+            showBrowserInterface(provider, provider);
+            await updateBrowserInfo();
+            await refreshScreenshot();
         }
         
-        // Advanced Interaction Functions
-        async function handlePortalClick(event) {
+        // Browser Navigation Functions
+        async function browserGoBack() {
+            if (!currentProvider) return;
+            try {
+                setBrowserLoading(true);
+                const res = await fetch(`/qaz/portal/${currentProvider}/back`, { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    updateAddressBar(data.current_url);
+                    await refreshScreenshot();
+                }
+            } catch (e) {
+                console.error('Go back error:', e);
+            } finally {
+                setBrowserLoading(false);
+            }
+        }
+        
+        async function browserGoForward() {
+            if (!currentProvider) return;
+            try {
+                setBrowserLoading(true);
+                const res = await fetch(`/qaz/portal/${currentProvider}/forward`, { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    updateAddressBar(data.current_url);
+                    await refreshScreenshot();
+                }
+            } catch (e) {
+                console.error('Go forward error:', e);
+            } finally {
+                setBrowserLoading(false);
+            }
+        }
+        
+        async function browserRefresh() {
+            if (!currentProvider) return;
+            try {
+                setBrowserLoading(true);
+                await fetch(`/qaz/portal/${currentProvider}/refresh`, { method: 'POST' });
+                await refreshScreenshot();
+            } catch (e) {
+                console.error('Refresh error:', e);
+            } finally {
+                setBrowserLoading(false);
+            }
+        }
+        
+        async function browserNavigate() {
+            if (!currentProvider) return;
+            const url = document.getElementById('browser-address-bar').value.trim();
+            if (!url) return;
+            
+            // Add https:// if no protocol specified
+            let fullUrl = url;
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                fullUrl = 'https://' + url;
+            }
+            
+            try {
+                setBrowserLoading(true);
+                const res = await fetch(`/qaz/portal/${currentProvider}/navigate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: fullUrl })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    updateAddressBar(data.url);
+                    document.getElementById('browser-page-title').textContent = data.title || 'Untitled';
+                    await refreshScreenshot();
+                }
+            } catch (e) {
+                console.error('Navigation error:', e);
+            } finally {
+                setBrowserLoading(false);
+            }
+        }
+        
+        async function updateBrowserInfo() {
+            if (!currentProvider) return;
+            try {
+                const res = await fetch(`/qaz/portal/${currentProvider}/info`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    updateAddressBar(data.url);
+                    document.getElementById('browser-page-title').textContent = data.title || 'Untitled';
+                }
+            } catch (e) {
+                console.error('Update info error:', e);
+            }
+        }
+        
+        function updateAddressBar(url) {
+            if (url) {
+                document.getElementById('browser-address-bar').value = url;
+            }
+        }
+        
+        function setBrowserLoading(loading) {
+            document.getElementById('browser-loading').style.display = loading ? 'block' : 'none';
+            document.getElementById('browser-status').textContent = loading ? 'Loading...' : 'Ready';
+        }
+        
+        // Screenshot Functions
+        async function refreshScreenshot() {
+            if (!currentProvider) return;
+            const img = document.getElementById('browser-screenshot');
+            const timestamp = Date.now();
+            img.src = `/qaz/portal/${currentProvider}/screenshot?t=${timestamp}`;
+        }
+        
+        async function manualScreenshot() {
+            await refreshScreenshot();
+            showBrowserStatus('Screenshot taken');
+        }
+        
+        function showBrowserStatus(message) {
+            document.getElementById('browser-status').textContent = message;
+            setTimeout(() => {
+                document.getElementById('browser-status').textContent = 'Ready';
+            }, 2000);
+        }
+        
+        // Interaction Functions
+        async function handleBrowserClick(event) {
             if (!currentProvider) return;
             
             const img = event.target;
@@ -698,79 +830,52 @@
             
             lastClickCoords = { x: browserX, y: browserY };
             
-            // Show visual feedback
+            // Show click feedback
             showClickFeedback(x, y);
+            
+            // Update coords display
+            document.getElementById('browser-coords').textContent = `Clicked: ${browserX}, ${browserY}`;
             
             try {
                 await portalAction('click', browserX, browserY);
-                document.getElementById('last-update').textContent = `Clicked at (${browserX}, ${browserY})`;
-                
-                // Auto-enable keyboard mode after clicking on an input
-                setTimeout(() => enableKeyboardMode(), 500);
             } catch (e) {
                 console.error('Click error:', e);
             }
         }
         
-        function handlePortalDoubleClick(event) {
-            // Double click focuses and enables keyboard
-            handlePortalClick(event);
-            enableKeyboardMode();
-        }
-        
         function showClickFeedback(x, y) {
-            const container = document.getElementById('portal-screenshot-container');
-            const feedback = document.createElement('div');
-            feedback.style.cssText = `
-                position: absolute;
-                left: ${x}px;
-                top: ${y}px;
-                width: 20px;
-                height: 20px;
-                border: 2px solid var(--accent);
-                border-radius: 50%;
-                transform: translate(-50%, -50%);
-                pointer-events: none;
-                animation: pulse 0.5s ease-out;
-            `;
-            container.appendChild(feedback);
-            setTimeout(() => feedback.remove(), 500);
+            const feedback = document.getElementById('click-feedback');
+            feedback.style.left = x + 'px';
+            feedback.style.top = y + 'px';
+            feedback.style.display = 'block';
+            setTimeout(() => {
+                feedback.style.display = 'none';
+            }, 500);
         }
         
-        function enableKeyboardMode() {
-            if (!currentProvider) return;
-            
-            keyboardActive = true;
-            document.getElementById('keyboard-status').style.display = 'inline';
-            document.getElementById('portal-focus-overlay').style.display = 'block';
-            document.getElementById('last-update').textContent = '⌨️ Keyboard mode active - type now!';
-            
-            // Focus the hidden input to capture keystrokes
-            const input = document.getElementById('portal-keyboard-capture');
-            input.focus();
-            
-            // Keep focus on the input
-            input.addEventListener('blur', () => {
-                if (keyboardActive) {
-                    setTimeout(() => input.focus(), 10);
-                }
-            });
-            
-            // Click on the last clicked position to ensure focus in browser
-            portalAction('focus', lastClickCoords.x, lastClickCoords.y);
+        function toggleKeyboardMode() {
+            keyboardActive = !keyboardActive;
+            const btn = document.getElementById('keyboard-toggle-btn');
+            if (keyboardActive) {
+                btn.textContent = '⌨️ Keyboard: ON';
+                btn.style.color = 'var(--success)';
+                btn.style.borderColor = 'var(--success)';
+                document.addEventListener('keydown', handleGlobalKeyDown);
+                showBrowserStatus('Keyboard mode ON - type anywhere');
+            } else {
+                btn.textContent = '⌨️ Keyboard: OFF';
+                btn.style.color = 'var(--text-muted)';
+                btn.style.borderColor = 'var(--border)';
+                document.removeEventListener('keydown', handleGlobalKeyDown);
+                showBrowserStatus('Keyboard mode OFF');
+            }
         }
         
-        function disableKeyboardMode() {
-            keyboardActive = false;
-            document.getElementById('keyboard-status').style.display = 'none';
-            document.getElementById('portal-focus-overlay').style.display = 'none';
-            document.getElementById('last-update').textContent = 'Click on screenshot to interact';
-        }
-        
-        async function handlePortalKeyDown(event) {
+        async function handleGlobalKeyDown(event) {
             if (!keyboardActive || !currentProvider) return;
             
-            event.preventDefault();
+            // Don't capture if typing in an input
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
             
             const keyMap = {
                 'Enter': 'Enter',
@@ -815,36 +920,38 @@
                 
                 if (data.status === 'success') {
                     // Screenshot is taken automatically by backend
-                    setTimeout(() => takePortalScreenshot(), 500);
+                    setTimeout(() => refreshScreenshot(), 500);
                 }
             } catch (e) {
                 console.error('Portal action error:', e);
             }
         }
         
-        async function takePortalScreenshot() {
+        async function browserNewChat() {
+            if (!currentProvider) return;
+            try {
+                await fetch(`/qaz/portal/${currentProvider}/newchat`, { method: 'POST' });
+                setTimeout(() => refreshScreenshot(), 1000);
+                showBrowserStatus('New chat started');
+            } catch (e) {
+                console.error('New chat error:', e);
+            }
+        }
+        
+        async function browserClickCenter() {
+            if (!currentProvider) return;
+            try {
+                await portalAction('click', 640, 350);
+                showBrowserStatus('Clicked center');
+            } catch (e) {
+                console.error('Click center error:', e);
+            }
+        }
+        
+        async function sendBrowserMessage() {
             if (!currentProvider) return;
             
-            const img = document.getElementById('portal-screenshot');
-            img.src = `/qaz/portal/${currentProvider}/screenshot?t=${Date.now()}`;
-        }
-        
-        async function portalNewChat() {
-            if (!currentProvider) return;
-            await fetch(`/qaz/portal/${currentProvider}/newchat`, { method: 'POST' });
-            setTimeout(() => takePortalScreenshot(), 1000);
-        }
-        
-        async function portalRefresh() {
-            if (!currentProvider) return;
-            await fetch(`/qaz/portal/${currentProvider}/refresh`, { method: 'POST' });
-            setTimeout(() => takePortalScreenshot(), 3000);
-        }
-        
-        async function sendPortalMessage() {
-            if (!currentProvider) return;
-            
-            const input = document.getElementById('portal-message-input');
+            const input = document.getElementById('browser-message-input');
             const message = input.value.trim();
             
             if (!message) return;
@@ -860,9 +967,8 @@
                 
                 if (data.status === 'success') {
                     input.value = '';
-                    document.getElementById('portal-response').textContent = data.response;
-                    document.getElementById('portal-response').style.display = 'block';
-                    setTimeout(() => takePortalScreenshot(), 1000);
+                    showBrowserStatus('Message sent');
+                    setTimeout(() => refreshScreenshot(), 1000);
                 }
             } catch (e) {
                 alert('Error: ' + e.message);
@@ -872,16 +978,23 @@
         async function closeCurrentPortal() {
             if (!currentProvider) return;
             
-            if (!confirm(`Close the ${currentProvider} portal?`)) return;
+            if (!confirm(`Close the ${currentProvider} browser?`)) return;
             
             try {
                 await fetch(`/qaz/portal/${currentProvider}/close`, { method: 'POST' });
                 
-                document.getElementById('portal-interface').style.display = 'none';
+                document.getElementById('browser-interface').style.display = 'none';
+                document.getElementById('portal-connection-status').textContent = '⚪ Not Connected';
+                document.getElementById('portal-connection-status').style.color = 'var(--text-muted)';
                 document.getElementById('portal-provider-select').value = '';
+                
+                if (screenshotInterval) {
+                    clearInterval(screenshotInterval);
+                    screenshotInterval = null;
+                }
+                
                 currentProvider = null;
                 keyboardActive = false;
-                disableKeyboardMode();
                 
                 await checkAllPortalStatus();
             } catch (e) {
@@ -1110,12 +1223,12 @@
         }
     </script>
     
-    <!-- Multi-Provider Interactive Browser Portal -->
+    <!-- 🌐 Enhanced Browser Portal with Full Navigation -->
     <div class="card" style="margin-top: 30px; border: 2px solid var(--accent);">
-        <h2 style="margin-bottom: 15px; color: var(--accent);">🌐 Multi-Provider Browser Portal</h2>
-        <p style="color: var(--text-muted); margin-bottom: 20px;">
-            Control browser sessions for Copilot, HuggingChat, ChatGPT, Gemini, and Z.ai. Click on the screenshot to interact, type with your keyboard!
-        </p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 style="color: var(--accent); margin: 0;">🌐 Browser Portal</h2>
+            <span id="portal-connection-status" style="font-size: 12px; color: var(--text-muted);">⚪ Not Connected</span>
+        </div>
         
         <!-- Provider Selector -->
         <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
@@ -1128,94 +1241,105 @@
                 <option value="zai">🌟 Z.ai</option>
             </select>
             <button id="portal-start-btn" onclick="startPortal()" style="background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                🚀 Start Portal
+                🚀 Start Browser
             </button>
-            <button id="portal-refresh-all-btn" onclick="checkAllPortalStatus()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                🔄 Refresh Status
+            <button onclick="checkAllPortalStatus()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                🔄 Check Status
             </button>
         </div>
         
         <!-- Active Portals List -->
         <div id="active-portals-list" style="margin-bottom: 20px;"></div>
         
-        <!-- Portal Interface -->
-        <div id="portal-interface" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div id="current-portal-status" style="font-weight: 600; color: var(--success);">✅ Portal Active</div>
-                <button onclick="closeCurrentPortal()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                    🗑️ Close Portal
+        <!-- Browser Interface (Hidden until started) -->
+        <div id="browser-interface" style="display: none;">
+            <!-- Browser Chrome / Address Bar -->
+            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px 8px 0 0; padding: 10px; display: flex; gap: 8px; align-items: center;">
+                <!-- Navigation Buttons -->
+                <div style="display: flex; gap: 4px;">
+                    <button onclick="browserGoBack()" style="background: transparent; border: none; color: var(--text); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Go Back">
+                        ←
+                    </button>
+                    <button onclick="browserGoForward()" style="background: transparent; border: none; color: var(--text); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Go Forward">
+                        →
+                    </button>
+                    <button onclick="browserRefresh()" style="background: transparent; border: none; color: var(--text); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;" title="Refresh">
+                        ↻
+                    </button>
+                </div>
+                
+                <!-- Address Bar -->
+                <div style="flex: 1; display: flex; gap: 8px;">
+                    <input type="text" id="browser-address-bar" placeholder="Enter URL..." 
+                        style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 20px; font-family: monospace; font-size: 13px;"
+                        onkeypress="if(event.key==='Enter')browserNavigate()">
+                    <button onclick="browserNavigate()" style="background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 600; cursor: pointer;">
+                        Go
+                    </button>
+                </div>
+                
+                <!-- Page Info -->
+                <button onclick="toggleKeyboardMode()" id="keyboard-toggle-btn" style="background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    ⌨️ Keyboard: OFF
+                </button>
+                
+                <button onclick="closeCurrentPortal()" style="background: transparent; color: var(--error); border: 1px solid var(--error); padding: 8px 12px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 12px;">
+                    ✕ Close
                 </button>
             </div>
             
-            <!-- Interactive Screenshot with Keyboard Support -->
-            <div style="background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div>
-                        <span style="font-weight: 600; color: var(--text-muted);">Interactive Browser</span>
-                        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px;">
-                            🖱️ Click to focus • ⌨️ Type with keyboard • 👆 Interactive screenshot
-                        </span>
-                    </div>
-                    <div style="display: flex; gap: 5px;">
-                        <span id="keyboard-status" style="font-size: 11px; color: var(--success); background: var(--surface); padding: 4px 8px; border-radius: 4px; display: none;">⌨️ Keyboard Active</span>
-                    </div>
-                </div>
-                
-                <div style="position: relative;" id="portal-screenshot-container">
-                    <img id="portal-screenshot" src="" alt="Browser Screenshot" 
-                        style="width: 100%; border-radius: 4px; border: 1px solid var(--border); display: block; cursor: crosshair;"
-                        onclick="handlePortalClick(event)"
-                        ondblclick="handlePortalDoubleClick(event)">
+            <!-- Page Title Display -->
+            <div id="browser-page-title" style="background: var(--surface); border-left: 1px solid var(--border); border-right: 1px solid var(--border); padding: 8px 15px; font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                Loading...
+            </div>
+            
+            <!-- Browser Viewport (Screenshot) -->
+            <div style="background: var(--bg); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; position: relative; overflow: hidden;">
+                <div id="browser-viewport" style="position: relative; cursor: crosshair;">
+                    <img id="browser-screenshot" src="" alt="Browser" 
+                        style="width: 100%; display: block;"
+                        onclick="handleBrowserClick(event)">
                     
-                    <!-- Overlay for keyboard focus indication -->
-                    <div id="portal-focus-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 3px solid var(--success); border-radius: 4px; pointer-events: none; display: none;"></div>
+                    <!-- Click Feedback Overlay -->
+                    <div id="click-feedback" style="position: absolute; width: 20px; height: 20px; border: 2px solid var(--accent); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; display: none;"></div>
                 </div>
                 
-                <!-- Hidden input for keyboard capture -->
-                <input type="text" id="portal-keyboard-capture" 
-                    style="position: absolute; opacity: 0; pointer-events: none;"
-                    onkeydown="handlePortalKeyDown(event)"
-                    onkeyup="handlePortalKeyUp(event)">
-                
-                <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--text-muted);">
-                    <span>💡 Click image to focus, then type with your keyboard</span>
-                    <span id="last-update">Waiting for interaction...</span>
+                <!-- Loading Indicator -->
+                <div id="browser-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px 40px; border-radius: 8px; display: none;">
+                    Loading...
                 </div>
             </div>
             
-            <!-- Quick Actions -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px;">
-                <button onclick="portalAction('click', 640, 350)" style="background: var(--warning); color: black; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                    ☑️ Click Center (CAPTCHA)
-                </button>
-                <button onclick="portalNewChat()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            <!-- Status Bar -->
+            <div style="background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted);">
+                <span id="browser-status">Ready</span>
+                <span id="browser-coords">Click to interact</span>
+            </div>
+            
+            <!-- Quick Actions Bar -->
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button onclick="browserNewChat()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
                     🆕 New Chat
                 </button>
-                <button onclick="portalRefresh()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                    🔄 Refresh Page
+                <button onclick="browserClickCenter()" style="background: var(--warning); color: black; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
+                    ☑️ Click Center
                 </button>
-                <button onclick="takePortalScreenshot()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                <button onclick="manualScreenshot()" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">
                     📸 Screenshot
-                </button>
-                <button onclick="enableKeyboardMode()" style="background: var(--success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                    ⌨️ Enable Keyboard
                 </button>
             </div>
             
             <!-- Message Input -->
-            <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
-                <label style="display: block; margin-bottom: 10px; font-weight: 600; color: var(--text-muted);">Send Message</label>
+            <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-top: 15px;">
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" id="portal-message-input" placeholder="Type your message and press Enter..." 
+                    <input type="text" id="browser-message-input" placeholder="Type message and press Enter..." 
                         style="flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; font-size: 14px;"
-                        onkeypress="if(event.key==='Enter')sendPortalMessage()">
-                    <button onclick="sendPortalMessage()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        onkeypress="if(event.key==='Enter')sendBrowserMessage()">
+                    <button onclick="sendBrowserMessage()" style="background: var(--success); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
                         Send
                     </button>
                 </div>
-                <div id="portal-response" style="display: none; margin-top: 15px; padding: 15px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap; font-family: monospace; font-size: 13px; max-height: 200px; overflow-y: auto;"></div>
             </div>
-            
         </div>
     </div>
     
