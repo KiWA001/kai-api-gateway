@@ -375,6 +375,20 @@ class AIEngine:
         state_manager = get_provider_state_manager_sync()
         enabled_providers = state_manager.get_enabled_provider_ids()
         
+        # --- GLOBAL SYSTEM PROMPT INJECTION ---
+        try:
+            with open("system_prompt.md", "r") as f:
+                template = f.read()
+                # If the template contains {prompt}, use it for formatting
+                if "{prompt}" in template:
+                    prompt = template.format(prompt=prompt)
+                else:
+                    # Fallback: Prepend if no placeholder key
+                    prompt = f"{template}\n\nUser message:\n{prompt}"
+        except Exception as e:
+            logger.warning(f"Failed to load system_prompt.md: {e}")
+        # -------------------------------------
+        
         # Build valid sets from enabled providers only
         valid_enabled_providers = set(self._providers.keys()) & set(enabled_providers)
         
