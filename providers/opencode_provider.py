@@ -26,8 +26,17 @@ class OpenCodeProvider(BaseProvider):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Send message to OpenCode API."""
+        """Send message to OpenCode API."""
         if not model:
-            model = "kimi-k2.5-free"
+            model = "opencode-kimi-k2.5-free"
+        
+        # Strip provider prefix if present
+        # e.g. "opencode-kimi-k2.5-free" -> "kimi-k2.5-free"
+        if model.startswith("opencode-"):
+            raw_model = model.replace("opencode-", "", 1)
+        else:
+            raw_model = model
+
 
         # The opencode config suggests:
         # baseURL: "https://opencode.ai/zen/v1"
@@ -41,7 +50,7 @@ class OpenCodeProvider(BaseProvider):
         messages.append({"role": "user", "content": prompt})
 
         # The config says model: "opencode-zen/{model}"
-        api_model = f"opencode-zen/{model}" if "/" not in model else model
+        api_model = f"opencode-zen/{raw_model}" if "/" not in raw_model else raw_model
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -82,16 +91,16 @@ class OpenCodeProvider(BaseProvider):
     def get_available_models(self) -> List[str]:
         # Copied from opencode_terminal.py
         return [
-            "kimi-k2.5-free",
-            "minimax-m2.5-free",
-            "big-pickle",
-            "glm-4.7"
+            "opencode-kimi-k2.5-free",
+            "opencode-minimax-m2.5-free",
+            "opencode-big-pickle",
+            "opencode-glm-4.7"
         ]
 
     async def health_check(self) -> bool:
         try:
             # Simple check
-            res = await self.send_message("hi", model="kimi-k2.5-free")
+            res = await self.send_message("hi", model="opencode-kimi-k2.5-free")
             return bool(res and res.get("response"))
         except:
             return False
