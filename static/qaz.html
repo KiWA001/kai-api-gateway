@@ -881,10 +881,17 @@
         <!-- Proxy Settings -->
         <div class="card">
             <div class="card-title" style="margin-bottom:12px;">Proxy Configuration</div>
-            <div class="input-group">
+            <div style="display:flex;flex-direction:column;gap:10px;">
                 <input type="text" id="proxy-input" class="input-field" placeholder="ip:port or http://ip:port">
-                <button class="btn btn-primary" onclick="setProxy()">Set</button>
-                <button class="btn btn-secondary" onclick="clearProxy()">Clear</button>
+                <div style="display:flex;gap:10px;">
+                    <input type="text" id="proxy-username" class="input-field" placeholder="Username (optional)" style="flex:1;">
+                    <input type="password" id="proxy-password" class="input-field" placeholder="Password (optional)" style="flex:1;">
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button class="btn btn-primary" onclick="setProxy()" style="flex:1;">Set Proxy</button>
+                    <button class="btn btn-secondary" onclick="clearProxy()" style="flex:1;">Clear</button>
+                    <button class="btn btn-success" onclick="testProxy()" style="flex:1;">Test</button>
+                </div>
             </div>
             <div id="proxy-status" style="margin-top:12px;font-size:0.875rem;color:var(--text-secondary);display:none;"></div>
         </div>
@@ -1240,7 +1247,7 @@
                             <span>${p.type}</span>
                         </div>
                         <label class="toggle-switch">
-                            <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="toggleProvider('${p.id}', this.checked)">
+                            <input type="checkbox" ${p.enabled ? 'checked' : ''} onclick="toggleProvider('${p.id}', this.checked, event)">
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
@@ -1250,15 +1257,36 @@
             }
         }
 
-        async function toggleProvider(id, enabled) {
+        async function toggleProvider(id, enabled, event) {
+            // Prevent event bubbling
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            
             try {
-                await fetch('/qaz/providers/toggle', {
+                console.log(`Toggling provider ${id} to ${enabled}`);
+                const res = await fetch('/qaz/providers/toggle', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ provider_id: id, enabled })
                 });
+                
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.detail || 'Failed to toggle');
+                }
+                
+                const data = await res.json();
+                console.log('Toggle success:', data);
+                
+                // Show success feedback
+                showProxyStatus(`Provider ${enabled ? 'enabled' : 'disabled'}`);
+                
             } catch (e) {
+                console.error('Toggle error:', e);
                 alert('Error: ' + e.message);
+                // Reload to get correct state
                 loadProviders();
             }
         }
@@ -1266,24 +1294,62 @@
         // Proxy
         async function setProxy() {
             const proxy = document.getElementById('proxy-input').value.trim();
-            if (!proxy) return;
+            if (!proxy) {
+                alert('Please enter a proxy address');
+                return;
+            }
+            
+            const username = document.getElementById('proxy-username').value.trim() || null;
+            const password = document.getElementById('proxy-password').value || null;
             
             try {
-                await fetch('/qaz/proxy/set', {
+                const res = await fetch('/qaz/proxy/set', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy })
+                    body: JSON.stringify({ proxy, username, password })
                 });
-                loadProxyStatus();
+                
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showProxyStatus(`✅ Proxy set: ${data.proxy}${data.has_auth ? ' (with auth)' : ''}`);
+                } else {
+                    showProxyStatus('❌ Failed to set proxy', true);
+                }
             } catch (e) {
-                alert('Error: ' + e.message);
+                showProxyStatus('❌ Error: ' + e.message, true);
             }
         }
 
         async function clearProxy() {
             await fetch('/qaz/proxy/clear', { method: 'POST' });
             document.getElementById('proxy-input').value = '';
+            document.getElementById('proxy-username').value = '';
+            document.getElementById('proxy-password').value = '';
             document.getElementById('proxy-status').style.display = 'none';
+            showProxyStatus('🗑️ Proxy cleared');
+        }
+
+        async function testProxy() {
+            try {
+                showProxyStatus('🧪 Testing proxy...');
+                const res = await fetch('/qaz/proxy/test', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.is_working) {
+                    showProxyStatus(`✅ Proxy working! Response time: ${data.response_time}`);
+                } else {
+                    showProxyStatus('❌ Proxy not working', true);
+                }
+            } catch (e) {
+                showProxyStatus('❌ Test failed: ' + e.message, true);
+            }
+        }
+
+        function showProxyStatus(message, isError = false) {
+            const statusDiv = document.getElementById('proxy-status');
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = message;
+            statusDiv.style.color = isError ? 'var(--error)' : 'var(--text-secondary)';
         }
 
         async function loadProxyStatus() {
@@ -1293,8 +1359,10 @@
                 
                 if (data.enabled) {
                     document.getElementById('proxy-input').value = data.proxy;
-                    document.getElementById('proxy-status').style.display = 'block';
-                    document.getElementById('proxy-status').textContent = `Proxy: ${data.proxy} | Status: ${data.is_working ? 'Working' : 'Not tested'}`;
+                    if (data.username) {
+                        document.getElementById('proxy-username').value = data.username;
+                    }
+                    showProxyStatus(`Proxy: ${data.proxy} | Auth: ${data.has_auth ? 'Yes' : 'No'} | Status: ${data.is_working ? 'Working' : 'Not tested'}`);
                 }
             } catch (e) {
                 console.error('Failed to load proxy status:', e);

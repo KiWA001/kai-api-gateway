@@ -1048,21 +1048,26 @@ async def toggle_provider(req: ProviderToggleRequest):
 # --- Custom Proxy Management ---
 
 class SetProxyRequest(BaseModel):
-    proxy: str  # Format: ip:port or protocol://ip:port
+    proxy: str  # Format: ip:port or protocol://ip:port or protocol://user:pass@ip:port
+    username: Optional[str] = None  # Optional username for proxy auth
+    password: Optional[str] = None  # Optional password for proxy auth
 
 @router.post("/proxy/set")
 async def set_custom_proxy(req: SetProxyRequest):
-    """Set a custom proxy for the entire container."""
+    """Set a custom proxy for the entire container with optional authentication."""
     try:
         from proxy_manager import get_proxy_manager
         
         proxy_mgr = get_proxy_manager()
-        success = proxy_mgr.set_custom_proxy(req.proxy)
+        success = proxy_mgr.set_custom_proxy(req.proxy, req.username, req.password)
         
         if success:
+            status = proxy_mgr.get_status()
             return {
                 "status": "success",
-                "proxy": req.proxy,
+                "proxy": status["proxy"],
+                "has_auth": status.get("has_auth", False),
+                "username": status.get("username"),
                 "message": "Custom proxy set successfully"
             }
         else:
