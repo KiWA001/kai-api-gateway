@@ -8,3 +8,5 @@ KAI_API_DOCKER/
 zai_captured.json
 .vscode/
 debug_screenshots/
+node_modules/
+.opencode/

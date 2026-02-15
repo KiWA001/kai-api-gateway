@@ -31,6 +31,12 @@ MODEL_RANKING = [
     ("g4f-gpt-3.5-turbo", "g4f", "gpt-3.5-turbo"),
     ("g4f-claude-3-haiku", "g4f", "claude-3-haiku"),
     ("g4f-mixtral-8x7b", "g4f", "mixtral-8x7b"),
+    
+    # Tier 4 — OpenCode Terminal Models (Free)
+    ("opencode-kimi-k2.5-free", "opencode", "kimi-k2.5-free"),
+    ("opencode-minimax-m2.5-free", "opencode", "minimax-m2.5-free"),
+    ("opencode-big-pickle", "opencode", "big-pickle"),
+    ("opencode-glm-4.7", "opencode", "glm-4.7"),
 ]
 
 # Request timeout in seconds per individual attempt
@@ -72,6 +78,7 @@ PROVIDERS = {
     "huggingchat": {"enabled": True, "name": "HuggingChat", "type": "browser"},
     "copilot": {"enabled": False, "name": "Microsoft Copilot", "type": "browser"},
     "chatgpt": {"enabled": False, "name": "ChatGPT", "type": "browser"},
+    "opencode": {"enabled": False, "name": "OpenCode Terminal", "type": "terminal"},
 }
 
 # API Keys
@@ -99,5 +106,11 @@ PROVIDER_MODELS = {
         "pollinations-bidara",
         "pollinations-chickytutor",
         "pollinations-midijourney",
+    ],
+    "opencode": [
+        "opencode-kimi-k2.5-free",
+        "opencode-minimax-m2.5-free",
+        "opencode-big-pickle",
+        "opencode-glm-4.7",
     ],
 }

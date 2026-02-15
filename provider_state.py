@@ -36,6 +36,7 @@ class ProviderStateManager:
                 
                 if res.data:
                     # Load existing states
+                    existing_ids = set()
                     for row in res.data:
                         provider_id = row.get("provider_id")
                         if provider_id:
@@ -44,6 +45,23 @@ class ProviderStateManager:
                                 "name": row.get("name", provider_id),
                                 "type": row.get("type", "api"),
                             }
+                            existing_ids.add(provider_id)
+                    
+                    # Add any new providers from PROVIDERS that aren't in DB
+                    for provider_id, config in PROVIDERS.items():
+                        if provider_id not in existing_ids:
+                            try:
+                                supabase.table(TABLE_NAME).insert({
+                                    "provider_id": provider_id,
+                                    "enabled": config["enabled"],
+                                    "name": config["name"],
+                                    "type": config["type"]
+                                }).execute()
+                                self._providers[provider_id] = config.copy()
+                                logger.info(f"✅ Added new provider: {provider_id}")
+                            except Exception as e:
+                                logger.warning(f"Could not add provider {provider_id}: {e}")
+                    
                     logger.info(f"✅ Loaded {len(self._providers)} provider states from Supabase")
                 else:
                     # Initialize with defaults

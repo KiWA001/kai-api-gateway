@@ -1,0 +1,24 @@
+{
+  "name": "kai_api",
+  "version": "1.0.0",
+  "description": "--- title: KAI API Gateway emoji: 🦀 colorFrom: indigo colorTo: purple sdk: docker pinned: false app_port: 7860 ---",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KiWA001/kai-api-gateway.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/KiWA001/kai-api-gateway/issues"
+  },
+  "homepage": "https://github.com/KiWA001/kai-api-gateway#readme",
+  "dependencies": {
+    "opencode-ai": "^1.2.4"
+  }
+}

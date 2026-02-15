@@ -1129,3 +1129,236 @@ async def test_custom_proxy():
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Saved Proxies Management ---
+
+class ProxyCreateRequest(BaseModel):
+    name: Optional[str] = None
+    ip: str
+    port: int
+    protocol: str = "http"
+    username: Optional[str] = None
+    password: Optional[str] = None
+    country: Optional[str] = None
+    city: Optional[str] = None
+    notes: Optional[str] = None
+
+@router.get("/proxies")
+async def list_proxies():
+    """Get all saved proxies from Supabase."""
+    try:
+        from db import get_supabase
+        
+        supabase = get_supabase()
+        if not supabase:
+            return {"proxies": []}
+        
+        res = supabase.table("kaiapi_proxies").select("*").order("created_at", desc=True).execute()
+        return {"proxies": res.data or []}
+    except Exception as e:
+        logger.error(f"Failed to list proxies: {e}")
+        return {"proxies": []}
+
+@router.post("/proxies")
+async def create_proxy(req: ProxyCreateRequest):
+    """Add a new proxy to Supabase."""
+    try:
+        from db import get_supabase
+        
+        supabase = get_supabase()
+        if not supabase:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        
+        proxy_data = {
+            "name": req.name,
+            "ip": req.ip,
+            "port": req.port,
+            "protocol": req.protocol,
+            "username": req.username,
+            "password": req.password,
+            "country": req.country,
+            "city": req.city,
+            "notes": req.notes,
+            "is_active": False
+        }
+        
+        res = supabase.table("kaiapi_proxies").insert(proxy_data).execute()
+        
+        return {
+            "status": "success",
+            "message": "Proxy saved",
+            "proxy": res.data[0] if res.data else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/proxies/{proxy_id}/activate")
+async def activate_proxy(proxy_id: int):
+    """Activate a saved proxy."""
+    try:
+        from db import get_supabase
+        from proxy_manager import get_proxy_manager
+        
+        supabase = get_supabase()
+        if not supabase:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        
+        res = supabase.table("kaiapi_proxies").select("*").eq("id", proxy_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Proxy not found")
+        
+        proxy = res.data[0]
+        
+        # Deactivate all first
+        supabase.table("kaiapi_proxies").update({"is_active": False}).neq("id", proxy_id).execute()
+        
+        # Activate this one
+        supabase.table("kaiapi_proxies").update({"is_active": True}).eq("id", proxy_id).execute()
+        
+        # Set as current
+        proxy_mgr = get_proxy_manager()
+        proxy_str = f"{proxy['protocol']}://{proxy['ip']}:{proxy['port']}"
+        proxy_mgr.set_custom_proxy(proxy_str, proxy.get("username"), proxy.get("password"))
+        
+        return {"status": "success", "message": f"Proxy activated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/proxies/{proxy_id}")
+async def delete_proxy(proxy_id: int):
+    """Delete a saved proxy."""
+    try:
+        from db import get_supabase
+        
+        supabase = get_supabase()
+        if not supabase:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        
+        supabase.table("kaiapi_proxies").delete().eq("id", proxy_id).execute()
+        
+        return {"status": "success", "message": "Proxy deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- OpenCode Terminal Portal ---
+
+class TerminalInput(BaseModel):
+    text: str
+
+class TerminalKey(BaseModel):
+    key: str
+
+@router.post("/terminal/start")
+async def start_terminal(req: dict):
+    """Start OpenCode terminal session."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        model = req.get("model", "kimi-k2.5-free")
+        manager = get_terminal_manager()
+        portal = manager.get_portal(model)
+        
+        if portal.is_running():
+            return {
+                "status": "already_running",
+                "model": model,
+                "message": f"Terminal for {model} is already running"
+            }
+        
+        await portal.initialize()
+        
+        return {
+            "status": "success",
+            "model": model,
+            "message": f"Terminal started for {model}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/terminal/output")
+async def get_terminal_output(model: str = "kimi-k2.5-free", lines: int = 100):
+    """Get recent terminal output."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        manager = get_terminal_manager()
+        portal = manager.get_portal(model)
+        
+        if not portal.is_running():
+            return {"lines": [], "status": "stopped"}
+            
+        output_lines = portal.get_output(max_lines=lines)
+        
+        # Format for frontend
+        formatted_lines = [
+            {"type": stream, "content": line} 
+            for stream, line in output_lines
+        ]
+        
+        return {
+            "lines": formatted_lines,
+            "status": "running"
+        }
+    except Exception as e:
+        return {"lines": [], "error": str(e), "status": "error"}
+
+@router.post("/terminal/input")
+async def send_terminal_input(req: TerminalInput, model: str = "kimi-k2.5-free"):
+    """Send text input to terminal."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        manager = get_terminal_manager()
+        portal = manager.get_portal(model)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail="Terminal not running")
+            
+        success = await portal.send_input(req.text)
+        
+        return {"status": "success" if success else "error"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/terminal/key")
+async def send_terminal_key(req: TerminalKey, model: str = "kimi-k2.5-free"):
+    """Send special key to terminal."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        manager = get_terminal_manager()
+        portal = manager.get_portal(model)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail="Terminal not running")
+            
+        success = await portal.send_key(req.key)
+        
+        return {"status": "success" if success else "error"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/terminal/close")
+async def close_terminal(req: dict):
+    """Close terminal session."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        model = req.get("model", "kimi-k2.5-free")
+        manager = get_terminal_manager()
+        portal = manager.get_portal(model)
+        
+        await portal.close()
+        
+        return {"status": "success", "message": "Terminal closed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
