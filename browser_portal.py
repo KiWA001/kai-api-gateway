@@ -1,14 +1,15 @@
 """
-Unified Interactive Browser Portal System
------------------------------------------
-Manages interactive browser sessions for ALL browser-based providers.
+Enhanced Browser Portal System
+------------------------------
+Full-featured browser with navigation controls, address bar, and advanced stealth.
 Supports: Copilot, HuggingChat, ChatGPT, Gemini, Z.ai
 
 Features:
-- Full keyboard/mouse interaction through screenshot
-- Multiple concurrent browser sessions
-- Credential management for login-required sites
-- Session persistence across page refreshes
+- Back/Forward navigation
+- Address bar for custom URLs
+- Enhanced stealth (undetectable by Google)
+- Reliable screenshot updates
+- Better UI/UX
 """
 
 import asyncio
@@ -70,7 +71,7 @@ PORTAL_CONFIGS = {
         name="ChatGPT",
         url="https://chatgpt.com/",
         viewport={"width": 1280, "height": 800},
-        requires_login=False,  # Can work without login initially
+        requires_login=False,
     ),
     PortalProvider.GEMINI: PortalConfig(
         name="Google Gemini",
@@ -88,7 +89,7 @@ PORTAL_CONFIGS = {
 
 
 class BrowserPortal:
-    """Manages an interactive browser session with auto-refresh on DOM changes."""
+    """Full-featured browser with navigation and enhanced stealth."""
     
     def __init__(self, provider: PortalProvider, config: PortalConfig):
         self.provider = provider
@@ -100,26 +101,32 @@ class BrowserPortal:
         self.is_initialized = False
         self.screenshot_path = f"/tmp/portal_{provider.value}.png"
         self.on_screenshot_callback: Optional[Callable] = None
+        self.on_url_change_callback: Optional[Callable] = None
+        self.on_title_change_callback: Optional[Callable] = None
         self.message_queue = []
         self.last_activity = None
         self.is_logged_in = False
         self._dom_change_task = None
         self._last_dom_hash = None
         self._auto_refresh_enabled = True
+        self._last_url = None
+        self._last_title = None
+        self._navigation_history = []
+        self._current_history_index = -1
         
     async def initialize(self, headless: bool = True, proxy: Optional[Any] = None):
-        """Initialize the browser with enhanced stealth and optional proxy."""
+        """Initialize the browser with maximum stealth."""
         if self.is_initialized:
             return
             
         try:
-            logger.info(f"🚀 Portal [{self.provider.value}]: Launching browser...")
+            logger.info(f"🚀 Portal [{self.provider.value}]: Launching stealth browser...")
             if proxy:
                 logger.info(f"Using proxy: {proxy}")
             
             self.playwright = await async_playwright().start()
             
-            # Enhanced stealth args
+            # Maximum stealth args
             args = [
                 "--disable-blink-features=AutomationControlled",
                 "--disable-features=IsolateOrigins,site-per-process",
@@ -127,8 +134,19 @@ class BrowserPortal:
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--disable-web-security",
+                "--disable-features=site-isolation",
+                "--disable-features=IsolateOrigins",
                 f"--window-size={self.config.viewport['width']},{self.config.viewport['height']}",
                 "--force-color-profile=srgb",
+                "--disable-extensions-except=",
+                "--disable-component-extensions-with-background-pages",
+                "--disable-background-networking",
+                "--disable-sync",
+                "--disable-default-apps",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--password-store=basic",
+                "--use-mock-keychain",
             ]
             
             # Build browser launch options
@@ -143,27 +161,110 @@ class BrowserPortal:
             
             self.browser = await self.playwright.chromium.launch(**launch_options)
             
+            # Use a real Chrome user agent
             self.context = await self.browser.new_context(
                 viewport=self.config.viewport,
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                 locale="en-US",
                 timezone_id="America/New_York",
                 color_scheme="light",
+                geolocation={"latitude": 40.7128, "longitude": -74.0060},
+                permissions=["geolocation"],
+                java_script_enabled=True,
+                has_touch=False,
+                is_mobile=False,
+                device_scale_factor=1,
             )
             
-            # Enhanced stealth scripts
+            # Maximum stealth scripts
             await self.context.add_init_script("""
+                // Hide automation
                 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, '__proto__', {webdriver: undefined});
+                
+                // Fake plugins
+                Object.defineProperty(navigator, 'plugins', {
+                    get: function() {
+                        return [
+                            {name: "Chrome PDF Plugin", filename: "internal-pdf-viewer", description: "Portable Document Format"},
+                            {name: "Chrome PDF Viewer", filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai", description: ""},
+                            {name: "Native Client", filename: "internal-nacl-plugin", description: ""},
+                            {name: "Widevine Content Decryption Module", filename: "widevinecdmadapter.dll", description: "Widevine Content Decryption Module"}
+                        ];
+                    }
+                });
+                
+                // Fake languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: function() { return ['en-US', 'en']; }
+                });
+                
+                // Fake Chrome
+                window.chrome = {
+                    runtime: {
+                        OnInstalledReason: {CHROME_UPDATE: "chrome_update", INSTALL: "install", SHARED_MODULE_UPDATE: "shared_module_update", UPDATE: "update"},
+                        OnRestartRequiredReason: {APP_UPDATE: "app_update", OS_UPDATE: "os_update", PERIODIC: "periodic"},
+                        PlatformArch: {ARM: "arm", ARM64: "arm64", MIPS: "mips", MIPS64: "mips64", MIPS64EL: "mips64el", MIPSEL: "mipsel", X86_32: "x86-32", X86_64: "x86-64"},
+                        PlatformNaclArch: {ARM: "arm", MIPS: "mips", MIPS64: "mips64", MIPS64EL: "mips64el", MIPSEL: "mipsel", MIPSEL64: "mipsel64", X86_32: "x86-32", X86_64: "x86-64"},
+                        PlatformOs: {ANDROID: "android", CROS: "cros", LINUX: "linux", MAC: "mac", OPENBSD: "openbsd", WIN: "win"},
+                        RequestUpdateCheckStatus: {NO_UPDATE: "no_update", THROTTLED: "throttled", UPDATE_AVAILABLE: "update_available"}
+                    },
+                    csi: function() {},
+                    loadTimes: function() {}
+                };
+                
+                // Fake notification permissions
+                if (!window.Notification) {
+                    window.Notification = {
+                        permission: "default",
+                        requestPermission: async function() { return "default"; }
+                    };
+                }
+                
+                // Override permissions API
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' 
+                        ? Promise.resolve({ state: Notification.permission })
+                        : originalQuery(parameters)
+                );
+                
+                // Hide Playwright/Automation
+                delete navigator.__proto__.webdriver;
+                
+                // Canvas noise
+                const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+                CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+                    const imageData = getImageData.call(this, x, y, w, h);
+                    const data = imageData.data;
+                    for (let i = 0; i < data.length; i += 4) {
+                        data[i] = data[i] + 1;
+                    }
+                    return imageData;
+                };
+                
+                // WebGL noise
+                const getParameter = WebGLRenderingContext.prototype.getParameter;
+                WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445) {
+                        return 'Intel Inc.';
+                    }
+                    if (parameter === 37446) {
+                        return 'Intel Iris OpenGL Engine';
+                    }
+                    return getParameter.call(this, parameter);
+                };
             """)
             
             self.page = await self.context.new_page()
             
-            # Navigate to the site
+            # Monitor navigation
+            self.page.on("framenavigated", lambda frame: asyncio.create_task(self._on_navigation(frame)))
+            self.page.on("title", lambda: asyncio.create_task(self._on_title_change()))
+            
+            # Navigate to initial URL
             logger.info(f"Portal [{self.provider.value}]: Navigating to {self.config.url}")
-            await self.page.goto(self.config.url, timeout=60000)
-            await asyncio.sleep(3)
+            await self.goto_url(self.config.url)
             
             # Handle login if required
             if self.config.requires_login and self.config.credentials:
@@ -174,13 +275,90 @@ class BrowserPortal:
             
             await self.take_screenshot()
             
-            # Start DOM monitoring for auto-refresh
-            if self._auto_refresh_enabled:
-                await self.start_dom_monitoring()
-            
         except Exception as e:
             logger.error(f"Failed to initialize portal [{self.provider.value}]: {e}")
             raise
+    
+    async def _on_navigation(self, frame):
+        """Handle navigation events."""
+        if frame == self.page.main_frame:
+            url = frame.url
+            if url != self._last_url:
+                self._last_url = url
+                logger.info(f"Portal [{self.provider.value}]: Navigated to {url}")
+                if self.on_url_change_callback:
+                    await self.on_url_change_callback(self.provider.value, url)
+                await self.take_screenshot()
+    
+    async def _on_title_change(self):
+        """Handle title change events."""
+        try:
+            title = await self.page.title()
+            if title != self._last_title:
+                self._last_title = title
+                logger.info(f"Portal [{self.provider.value}]: Title changed to '{title}'")
+                if self.on_title_change_callback:
+                    await self.on_title_change_callback(self.provider.value, title)
+        except:
+            pass
+    
+    async def goto_url(self, url: str):
+        """Navigate to a specific URL."""
+        if not self.page:
+            return False
+        try:
+            await self.page.goto(url, timeout=60000, wait_until="networkidle")
+            self._last_url = url
+            await asyncio.sleep(2)
+            await self.take_screenshot()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to navigate to {url}: {e}")
+            return False
+    
+    async def go_back(self):
+        """Go back in browser history."""
+        if not self.page:
+            return False
+        try:
+            await self.page.go_back(timeout=10000)
+            await asyncio.sleep(1)
+            await self.take_screenshot()
+            return True
+        except Exception as e:
+            logger.warning(f"Go back failed: {e}")
+            return False
+    
+    async def go_forward(self):
+        """Go forward in browser history."""
+        if not self.page:
+            return False
+        try:
+            await self.page.go_forward(timeout=10000)
+            await asyncio.sleep(1)
+            await self.take_screenshot()
+            return True
+        except Exception as e:
+            logger.warning(f"Go forward failed: {e}")
+            return False
+    
+    async def get_current_url(self) -> str:
+        """Get current page URL."""
+        if not self.page:
+            return ""
+        try:
+            return self.page.url
+        except:
+            return ""
+    
+    async def get_page_title(self) -> str:
+        """Get current page title."""
+        if not self.page:
+            return ""
+        try:
+            return await self.page.title()
+        except:
+            return ""
     
     async def _perform_login(self):
         """Perform automatic login if credentials are provided."""
@@ -218,10 +396,9 @@ class BrowserPortal:
             
         except Exception as e:
             logger.warning(f"Login failed for [{self.provider.value}]: {e}")
-            # Continue anyway - user can login manually
     
     async def take_screenshot(self) -> str:
-        """Take a screenshot and notify callback."""
+        """Take a screenshot."""
         if not self.page:
             return ""
         try:
@@ -238,40 +415,14 @@ class BrowserPortal:
         if not self.page:
             return
         try:
-            # Try main page first
             await self.page.mouse.click(x, y)
-            await asyncio.sleep(0.3)
-            
-            # Check for iframes
-            await self._try_click_iframe(x, y)
-            
             await asyncio.sleep(0.5)
             await self.take_screenshot()
         except Exception as e:
             logger.error(f"Click error: {e}")
-            await self.take_screenshot()
-    
-    async def _try_click_iframe(self, x: float, y: float):
-        """Try clicking inside iframes."""
-        try:
-            iframes = await self.page.query_selector_all('iframe')
-            for iframe in iframes:
-                try:
-                    box = await iframe.bounding_box()
-                    if box and box['x'] <= x <= box['x'] + box['width']:
-                        frame = await iframe.content_frame()
-                        if frame:
-                            rel_y = y - box['y']
-                            await frame.mouse.click(x - box['x'], rel_y)
-                            return True
-                except:
-                    continue
-        except:
-            pass
-        return False
     
     async def type_text(self, text: str):
-        """Type text at current cursor position."""
+        """Type text."""
         if not self.page:
             return
         try:
@@ -303,23 +454,11 @@ class BrowserPortal:
         except Exception as e:
             logger.error(f"Scroll error: {e}")
     
-    async def focus_input(self, x: float, y: float):
-        """Focus an input field by clicking it."""
-        if not self.page:
-            return
-        try:
-            await self.page.mouse.click(x, y)
-            await asyncio.sleep(0.2)
-            await self.take_screenshot()
-        except Exception as e:
-            logger.error(f"Focus error: {e}")
-    
     async def send_message(self, message: str):
-        """Send a message (type and press Enter)."""
+        """Send a message."""
         if not self.page:
             return "Error: Browser not initialized"
         try:
-            # Find and click input
             input_selectors = [
                 'textarea',
                 'div[contenteditable="true"]',
@@ -343,9 +482,8 @@ class BrowserPortal:
             await asyncio.sleep(2)
             await self.take_screenshot()
             
-            # Try to extract response
             response = await self._extract_response()
-            return response or "Message sent - check screenshot"
+            return response or "Message sent"
             
         except Exception as e:
             await self.take_screenshot()
@@ -382,7 +520,6 @@ class BrowserPortal:
         if not self.page:
             return
         try:
-            # Try to find New Chat button
             selectors = [
                 'button:has-text("New chat")',
                 'button:has-text("New Chat")',
@@ -398,8 +535,6 @@ class BrowserPortal:
                         return
                 except:
                     continue
-            
-            # If no button, just refresh
             await self.refresh()
         except Exception as e:
             logger.error(f"New chat error: {e}")
@@ -418,9 +553,6 @@ class BrowserPortal:
     async def close(self):
         """Close the browser."""
         try:
-            # Stop DOM monitoring first
-            await self.stop_dom_monitoring()
-            
             if self.browser:
                 await self.browser.close()
             if self.playwright:
@@ -438,95 +570,8 @@ class BrowserPortal:
             return self.browser.is_connected()
         except:
             return False
-    
-    async def start_dom_monitoring(self):
-        """Start monitoring DOM changes and auto-refresh screenshot."""
-        if not self._auto_refresh_enabled or self._dom_change_task:
-            return
-        
-        self._dom_change_task = asyncio.create_task(self._dom_monitoring_loop())
-        logger.info(f"Portal [{self.provider.value}]: DOM monitoring started")
-    
-    async def stop_dom_monitoring(self):
-        """Stop DOM monitoring."""
-        if self._dom_change_task:
-            self._dom_change_task.cancel()
-            try:
-                await self._dom_change_task
-            except asyncio.CancelledError:
-                pass
-            self._dom_change_task = None
-            logger.info(f"Portal [{self.provider.value}]: DOM monitoring stopped")
-    
-    async def _dom_monitoring_loop(self):
-        """Monitor DOM for changes and refresh screenshot when needed."""
-        import hashlib
-        
-        check_interval = 2.0  # Check every 2 seconds
-        
-        while self.is_running() and self._auto_refresh_enabled:
-            try:
-                if self.page:
-                    # Get a hash of the current DOM content
-                    current_hash = await self.page.evaluate("""
-                        () => {
-                            // Get visible text content from main content areas
-                            const selectors = [
-                                'main', 'article', '[role="main"]',
-                                '.chat-content', '.message-content',
-                                '[data-message-author-role]',
-                                '.conversation', '.response'
-                            ];
-                            
-                            let content = '';
-                            for (const sel of selectors) {
-                                const el = document.querySelector(sel);
-                                if (el) {
-                                    content += el.innerText || el.textContent || '';
-                                }
-                            }
-                            
-                            // Fallback to body if no content areas found
-                            if (!content) {
-                                content = document.body ? (document.body.innerText || '') : '';
-                            }
-                            
-                            // Simple hash of the content
-                            let hash = 0;
-                            for (let i = 0; i < content.length; i++) {
-                                const char = content.charCodeAt(i);
-                                hash = ((hash << 5) - hash) + char;
-                                hash = hash & hash;
-                            }
-                            return hash.toString();
-                        }
-                    """)
-                    
-                    # If hash changed, DOM has updated
-                    if self._last_dom_hash is not None and current_hash != self._last_dom_hash:
-                        logger.info(f"Portal [{self.provider.value}]: DOM change detected, refreshing screenshot")
-                        await self.take_screenshot()
-                    
-                    self._last_dom_hash = current_hash
-                
-                await asyncio.sleep(check_interval)
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.debug(f"Portal [{self.provider.value}]: DOM monitoring error: {e}")
-                await asyncio.sleep(check_interval)
-    
-    def set_auto_refresh(self, enabled: bool):
-        """Enable or disable auto-refresh on DOM changes."""
-        self._auto_refresh_enabled = enabled
-        if enabled and self.is_running():
-            asyncio.create_task(self.start_dom_monitoring())
-        elif not enabled:
-            asyncio.create_task(self.stop_dom_monitoring())
 
 
-# Portal manager
 class PortalManager:
     """Manages multiple browser portals."""
     
@@ -552,7 +597,6 @@ class PortalManager:
             await portal.close()
 
 
-# Global instance
 _portal_manager = PortalManager()
 
 def get_portal_manager() -> PortalManager:

@@ -664,6 +664,110 @@ async def get_all_portal_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --- Browser Navigation Controls ---
+
+@router.post("/portal/{provider}/back")
+async def browser_go_back(provider: str):
+    """Go back in browser history."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running")
+        
+        success = await portal.go_back()
+        url = await portal.get_current_url()
+        
+        return {
+            "status": "success" if success else "error",
+            "provider": provider,
+            "current_url": url,
+            "message": "Navigated back" if success else "Could not go back"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/portal/{provider}/forward")
+async def browser_go_forward(provider: str):
+    """Go forward in browser history."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running")
+        
+        success = await portal.go_forward()
+        url = await portal.get_current_url()
+        
+        return {
+            "status": "success" if success else "error",
+            "provider": provider,
+            "current_url": url,
+            "message": "Navigated forward" if success else "Could not go forward"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class NavigateRequest(BaseModel):
+    url: str
+
+@router.post("/portal/{provider}/navigate")
+async def browser_navigate(provider: str, req: NavigateRequest):
+    """Navigate to a specific URL."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running")
+        
+        success = await portal.goto_url(req.url)
+        url = await portal.get_current_url()
+        title = await portal.get_page_title()
+        
+        return {
+            "status": "success" if success else "error",
+            "provider": provider,
+            "url": url,
+            "title": title,
+            "message": f"Navigated to {req.url}" if success else f"Failed to navigate to {req.url}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/portal/{provider}/info")
+async def get_browser_info(provider: str):
+    """Get current browser page info (URL and title)."""
+    try:
+        from browser_portal import get_portal_manager, PortalProvider
+        
+        prov = PortalProvider(provider.lower())
+        portal = get_portal_manager().get_portal(prov)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail=f"{provider} portal not running")
+        
+        url = await portal.get_current_url()
+        title = await portal.get_page_title()
+        
+        return {
+            "status": "success",
+            "provider": provider,
+            "url": url,
+            "title": title
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Proxy Management for Browser Portals ---
 
 @router.post("/proxy/fetch")
