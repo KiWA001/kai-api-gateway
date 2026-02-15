@@ -2,7 +2,7 @@
 Provider State Manager
 ----------------------
 Manages enabled/disabled state of providers with Supabase persistence.
-Uses KAIAPI_ prefixed table names for multi-project organization.
+Uses kaiapi_ prefixed table names for multi-project organization.
 """
 
 import logging
@@ -12,8 +12,8 @@ from config import PROVIDERS
 
 logger = logging.getLogger("kai_api.provider_state")
 
-# Table name with KAIAPI_ prefix
-TABLE_NAME = "KAIAPI_provider_states"
+# Table name with kaiapi_ prefix
+TABLE_NAME = "kaiapi_provider_states"
 
 class ProviderStateManager:
     """Manages provider enable/disable state with Supabase persistence."""
@@ -31,7 +31,7 @@ class ProviderStateManager:
         
         if supabase:
             try:
-                # Try to load from Supabase (using KAIAPI_ prefixed table)
+                # Try to load from Supabase (using kaiapi_ prefixed table)
                 res = supabase.table(TABLE_NAME).select("*").execute()
                 
                 if res.data:

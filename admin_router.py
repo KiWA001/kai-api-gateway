@@ -43,7 +43,7 @@ async def list_keys():
         raise HTTPException(status_code=503, detail="Database unavailable")
         
     try:
-        res = supabase.table("KAIAPI_api_keys").select("*").order("created_at", desc=True).execute()
+        res = supabase.table("kaiapi_api_keys").select("*").order("created_at", desc=True).execute()
         return res.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -67,7 +67,7 @@ async def create_key(req: CreateKeyRequest):
     }
     
     try:
-        res = supabase.table("KAIAPI_api_keys").insert(new_key).execute()
+        res = supabase.table("kaiapi_api_keys").insert(new_key).execute()
         if res.data:
             return res.data[0]
         raise HTTPException(status_code=500, detail="Failed to create key")
@@ -84,7 +84,7 @@ async def revoke_key(key_id: str):
     try:
         # Check if exists first? Or just delete.
         # Hard delete for now, or soft delete if we had is_active column logic in router update, but delete is cleaner for management
-        res = supabase.table("KAIAPI_api_keys").delete().eq("id", key_id).execute()
+        res = supabase.table("kaiapi_api_keys").delete().eq("id", key_id).execute()
         return {"status": "success", "deleted": key_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -97,7 +97,7 @@ async def reset_usage(key_id: str):
         raise HTTPException(status_code=503, detail="Database unavailable")
         
     try:
-        supabase.table("KAIAPI_api_keys").update({"usage_tokens": 0}).eq("id", key_id).execute()
+        supabase.table("kaiapi_api_keys").update({"usage_tokens": 0}).eq("id", key_id).execute()
         return {"status": "reset"}
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
@@ -113,7 +113,7 @@ async def lookup_key_by_token(req: LookupKeyRequest):
         raise HTTPException(status_code=400, detail="Invalid token format")
     
     try:
-        res = supabase.table("KAIAPI_api_keys").select("*").eq("token", req.token).execute()
+        res = supabase.table("kaiapi_api_keys").select("*").eq("token", req.token).execute()
         
         if not res.data or len(res.data) == 0:
             raise HTTPException(status_code=404, detail="Key not found")

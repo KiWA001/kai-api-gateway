@@ -102,7 +102,7 @@ class AIEngine:
 
         try:
             # Fetch all stats
-            response = self.supabase.table("KAIAPI_model_stats").select("*").execute()
+            response = self.supabase.table("kaiapi_model_stats").select("*").execute()
             for row in response.data:
                 self._stats[row['id']] = {
                     "success": row.get('success', 0),
@@ -132,7 +132,7 @@ class AIEngine:
                 "total_time_ms": data.get("total_time_ms", 0),
                 "count_samples": data.get("count_samples", 0)
             }
-            self.supabase.table("KAIAPI_model_stats").upsert(record).execute()
+            self.supabase.table("kaiapi_model_stats").upsert(record).execute()
         except Exception as e:
             logger.error(f"Failed to save stats for {key}: {e}")
 
@@ -294,7 +294,7 @@ class AIEngine:
         if self.supabase:
             try:
                 # Delete all rows
-                self.supabase.table("KAIAPI_model_stats").delete().neq("id", "0").execute()
+                self.supabase.table("kaiapi_model_stats").delete().neq("id", "0").execute()
                 logger.info("Cleared all stats from Supabase")
             except Exception as e:
                 logger.error(f"Failed to clear Supabase stats: {e}")
@@ -623,7 +623,7 @@ class AIEngine:
              
              # Attempt to reset Supabase (blocking, but necessary for persistence)
              if self.supabase:
-                 self.supabase.table("KAIAPI_model_stats").update({"consecutive_failures": 0}).gt("consecutive_failures", 0).execute()
+                 self.supabase.table("kaiapi_model_stats").update({"consecutive_failures": 0}).gt("consecutive_failures", 0).execute()
         except Exception as reset_err:
              logger.error(f"Failed to auto-reset stats: {reset_err}")
 

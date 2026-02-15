@@ -1,11 +1,11 @@
 -- ============================================
 -- K-AI API Gateway - Complete Supabase SQL Setup
 -- ============================================
--- This script handles both creating tables with KAIAPI_ prefix
+-- This script handles both creating tables with kaiapi_ prefix
 -- and migrating data from old tables (if they exist)
 
 -- ============================================
--- STEP 1: Rename existing tables to add KAIAPI_ prefix
+-- STEP 1: Rename existing tables to add kaiapi_ prefix
 -- ============================================
 
 -- Rename api_keys table if it exists
@@ -14,8 +14,8 @@ BEGIN
     IF EXISTS (SELECT FROM information_schema.tables 
                WHERE table_schema = 'public' 
                AND table_name = 'api_keys') THEN
-        ALTER TABLE api_keys RENAME TO KAIAPI_api_keys;
-        RAISE NOTICE 'Renamed api_keys to KAIAPI_api_keys';
+        ALTER TABLE api_keys RENAME TO kaiapi_api_keys;
+        RAISE NOTICE 'Renamed api_keys to kaiapi_api_keys';
     END IF;
 END $$;
 
@@ -25,8 +25,8 @@ BEGIN
     IF EXISTS (SELECT FROM information_schema.tables 
                WHERE table_schema = 'public' 
                AND table_name = 'model_stats') THEN
-        ALTER TABLE model_stats RENAME TO KAIAPI_model_stats;
-        RAISE NOTICE 'Renamed model_stats to KAIAPI_model_stats';
+        ALTER TABLE model_stats RENAME TO kaiapi_model_stats;
+        RAISE NOTICE 'Renamed model_stats to kaiapi_model_stats';
     END IF;
 END $$;
 
@@ -36,8 +36,8 @@ BEGIN
     IF EXISTS (SELECT FROM information_schema.tables 
                WHERE table_schema = 'public' 
                AND table_name = 'provider_sessions') THEN
-        ALTER TABLE provider_sessions RENAME TO KAIAPI_provider_sessions;
-        RAISE NOTICE 'Renamed provider_sessions to KAIAPI_provider_sessions';
+        ALTER TABLE provider_sessions RENAME TO kaiapi_provider_sessions;
+        RAISE NOTICE 'Renamed provider_sessions to kaiapi_provider_sessions';
     END IF;
 END $$;
 
@@ -47,15 +47,15 @@ BEGIN
     IF EXISTS (SELECT FROM information_schema.tables 
                WHERE table_schema = 'public' 
                AND table_name = 'provider_states') THEN
-        ALTER TABLE provider_states RENAME TO KAIAPI_provider_states;
-        RAISE NOTICE 'Renamed provider_states to KAIAPI_provider_states';
+        ALTER TABLE provider_states RENAME TO kaiapi_provider_states;
+        RAISE NOTICE 'Renamed provider_states to kaiapi_provider_states';
     END IF;
 END $$;
 
 -- ============================================
--- STEP 2: Create KAIAPI_api_keys table (if not exists)
+-- STEP 2: Create kaiapi_api_keys table (if not exists)
 -- ============================================
-CREATE TABLE IF NOT EXISTS KAIAPI_api_keys (
+CREATE TABLE IF NOT EXISTS kaiapi_api_keys (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     token VARCHAR(255) UNIQUE NOT NULL,
@@ -66,13 +66,13 @@ CREATE TABLE IF NOT EXISTS KAIAPI_api_keys (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_KAIAPI_api_keys_token ON KAIAPI_api_keys(token);
-CREATE INDEX IF NOT EXISTS idx_KAIAPI_api_keys_is_active ON KAIAPI_api_keys(is_active);
+CREATE INDEX IF NOT EXISTS idx_kaiapi_api_keys_token ON kaiapi_api_keys(token);
+CREATE INDEX IF NOT EXISTS idx_kaiapi_api_keys_is_active ON kaiapi_api_keys(is_active);
 
 -- ============================================
--- STEP 3: Create KAIAPI_model_stats table (if not exists)
+-- STEP 3: Create kaiapi_model_stats table (if not exists)
 -- ============================================
-CREATE TABLE IF NOT EXISTS KAIAPI_model_stats (
+CREATE TABLE IF NOT EXISTS kaiapi_model_stats (
     id VARCHAR(255) PRIMARY KEY,
     success INTEGER NOT NULL DEFAULT 0,
     failure INTEGER NOT NULL DEFAULT 0,
@@ -84,12 +84,12 @@ CREATE TABLE IF NOT EXISTS KAIAPI_model_stats (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_KAIAPI_model_stats_id ON KAIAPI_model_stats(id);
+CREATE INDEX IF NOT EXISTS idx_kaiapi_model_stats_id ON kaiapi_model_stats(id);
 
 -- ============================================
--- STEP 4: Create KAIAPI_provider_sessions table (if not exists)
+-- STEP 4: Create kaiapi_provider_sessions table (if not exists)
 -- ============================================
-CREATE TABLE IF NOT EXISTS KAIAPI_provider_sessions (
+CREATE TABLE IF NOT EXISTS kaiapi_provider_sessions (
     id SERIAL PRIMARY KEY,
     provider VARCHAR(50) UNIQUE NOT NULL,
     cookies JSONB,
@@ -98,12 +98,12 @@ CREATE TABLE IF NOT EXISTS KAIAPI_provider_sessions (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_KAIAPI_provider_sessions_provider ON KAIAPI_provider_sessions(provider);
+CREATE INDEX IF NOT EXISTS idx_kaiapi_provider_sessions_provider ON kaiapi_provider_sessions(provider);
 
 -- ============================================
--- STEP 5: Create KAIAPI_provider_states table (NEW - for toggle management)
+-- STEP 5: Create kaiapi_provider_states table (NEW - for toggle management)
 -- ============================================
-CREATE TABLE IF NOT EXISTS KAIAPI_provider_states (
+CREATE TABLE IF NOT EXISTS kaiapi_provider_states (
     id SERIAL PRIMARY KEY,
     provider_id VARCHAR(50) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -113,11 +113,11 @@ CREATE TABLE IF NOT EXISTS KAIAPI_provider_states (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_KAIAPI_provider_states_provider_id ON KAIAPI_provider_states(provider_id);
-CREATE INDEX IF NOT EXISTS idx_KAIAPI_provider_states_enabled ON KAIAPI_provider_states(enabled);
+CREATE INDEX IF NOT EXISTS idx_kaiapi_provider_states_provider_id ON kaiapi_provider_states(provider_id);
+CREATE INDEX IF NOT EXISTS idx_kaiapi_provider_states_enabled ON kaiapi_provider_states(enabled);
 
 -- Insert default providers (if table is empty)
-INSERT INTO KAIAPI_provider_states (provider_id, name, type, enabled) VALUES
+INSERT INTO kaiapi_provider_states (provider_id, name, type, enabled) VALUES
     ('g4f', 'G4F (Free GPT-4)', 'api', true),
     ('zai', 'Z.ai (GLM-5)', 'api', true),
     ('gemini', 'Google Gemini', 'api', true),
@@ -141,27 +141,27 @@ END;
 $$ language 'plpgsql';
 
 -- Create triggers for all tables
-DROP TRIGGER IF EXISTS update_KAIAPI_api_keys_updated_at ON KAIAPI_api_keys;
-CREATE TRIGGER update_KAIAPI_api_keys_updated_at
-    BEFORE UPDATE ON KAIAPI_api_keys
+DROP TRIGGER IF EXISTS update_kaiapi_api_keys_updated_at ON kaiapi_api_keys;
+CREATE TRIGGER update_kaiapi_api_keys_updated_at
+    BEFORE UPDATE ON kaiapi_api_keys
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_KAIAPI_model_stats_updated_at ON KAIAPI_model_stats;
-CREATE TRIGGER update_KAIAPI_model_stats_updated_at
-    BEFORE UPDATE ON KAIAPI_model_stats
+DROP TRIGGER IF EXISTS update_kaiapi_model_stats_updated_at ON kaiapi_model_stats;
+CREATE TRIGGER update_kaiapi_model_stats_updated_at
+    BEFORE UPDATE ON kaiapi_model_stats
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_KAIAPI_provider_sessions_updated_at ON KAIAPI_provider_sessions;
-CREATE TRIGGER update_KAIAPI_provider_sessions_updated_at
-    BEFORE UPDATE ON KAIAPI_provider_sessions
+DROP TRIGGER IF EXISTS update_kaiapi_provider_sessions_updated_at ON kaiapi_provider_sessions;
+CREATE TRIGGER update_kaiapi_provider_sessions_updated_at
+    BEFORE UPDATE ON kaiapi_provider_sessions
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_KAIAPI_provider_states_updated_at ON KAIAPI_provider_states;
-CREATE TRIGGER update_KAIAPI_provider_states_updated_at
-    BEFORE UPDATE ON KAIAPI_provider_states
+DROP TRIGGER IF EXISTS update_kaiapi_provider_states_updated_at ON kaiapi_provider_states;
+CREATE TRIGGER update_kaiapi_provider_states_updated_at
+    BEFORE UPDATE ON kaiapi_provider_states
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
@@ -170,35 +170,35 @@ CREATE TRIGGER update_KAIAPI_provider_states_updated_at
 -- ============================================
 -- Uncomment the following lines if you want to enable RLS
 
--- ALTER TABLE KAIAPI_api_keys ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE KAIAPI_model_stats ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE KAIAPI_provider_sessions ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE KAIAPI_provider_states ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE kaiapi_api_keys ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE kaiapi_model_stats ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE kaiapi_provider_sessions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE kaiapi_provider_states ENABLE ROW LEVEL SECURITY;
 
 -- Create policy to allow all operations (adjust as needed)
--- CREATE POLICY "Allow all operations on KAIAPI_api_keys" 
---     ON KAIAPI_api_keys 
+-- CREATE POLICY "Allow all operations on kaiapi_api_keys" 
+--     ON kaiapi_api_keys 
 --     FOR ALL 
 --     TO anon, authenticated 
 --     USING (true) 
 --     WITH CHECK (true);
 
--- CREATE POLICY "Allow all operations on KAIAPI_model_stats" 
---     ON KAIAPI_model_stats 
+-- CREATE POLICY "Allow all operations on kaiapi_model_stats" 
+--     ON kaiapi_model_stats 
 --     FOR ALL 
 --     TO anon, authenticated 
 --     USING (true) 
 --     WITH CHECK (true);
 
--- CREATE POLICY "Allow all operations on KAIAPI_provider_sessions" 
---     ON KAIAPI_provider_sessions 
+-- CREATE POLICY "Allow all operations on kaiapi_provider_sessions" 
+--     ON kaiapi_provider_sessions 
 --     FOR ALL 
 --     TO anon, authenticated 
 --     USING (true) 
 --     WITH CHECK (true);
 
--- CREATE POLICY "Allow all operations on KAIAPI_provider_states" 
---     ON KAIAPI_provider_states 
+-- CREATE POLICY "Allow all operations on kaiapi_provider_states" 
+--     ON kaiapi_provider_states 
 --     FOR ALL 
 --     TO anon, authenticated 
 --     USING (true) 
@@ -211,5 +211,5 @@ SELECT 'Tables created successfully:' as message;
 SELECT table_name 
 FROM information_schema.tables 
 WHERE table_schema = 'public' 
-AND table_name LIKE 'KAIAPI_%'
+AND table_name LIKE 'kaiapi_%'
 ORDER BY table_name;
