@@ -166,47 +166,55 @@ class OpenCodeSession:
         return False
     
     async def chat(self, message: str) -> str:
-        """Send message and get response"""
-        if not self.is_running:
-            await self.start()
+        """Send message and get response via HTTP API"""
+        import aiohttp
         
-        # Start new chat
-        await self.send_key('ctrl+x')
-        await asyncio.sleep(0.3)
-        await self.send_input('n')
-        await asyncio.sleep(0.5)
+        # Use OpenCode's HTTP API instead of TUI parsing
+        url = "https://opencode.ai/zen/v1/chat/completions"
         
-        # Send message
-        await self.send_input(message)
-        
-        # Wait for response
-        await asyncio.sleep(3)
-        
-        # Read output
-        output = ""
         try:
-            import select
-            while True:
-                if self.process.stdout in select.select([self.process.stdout], [], [], 0.5)[0]:
-                    line = self.process.stdout.readline()
-                    if line:
-                        output += line
-                    else:
-                        break
-                else:
-                    break
-        except:
-            pass
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json={
+                        "model": "opencode-zen/kimi-k2.5-free",
+                        "messages": [{"role": "user", "content": message}],
+                        "stream": False
+                    },
+                    headers={"Content-Type": "application/json"},
+                    timeout=aiohttp.ClientTimeout(total=60)
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "choices" in data and len(data["choices"]) > 0:
+                            content = data["choices"][0]["message"]["content"]
+                            
+                            # Track message count for disposable mode
+                            self.message_count += 1
+                            
+                            # Auto-reset after 20 messages
+                            if self.message_count >= self.max_messages:
+                                logger.info("🔄 Auto-reset triggered")
+                                await self.reset_session()
+                            
+                            return content
+            
+            return "No response from OpenCode"
+            
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            return f"Error: {str(e)}"
+    
+    async def reset_session(self):
+        """Reset session for disposable mode"""
+        # Generate new identity
+        identity = self.generate_identity()
+        self.session_id = identity["session_id"][:8]
+        self.message_count = 0
         
-        self.message_count += 1
-        
-        # Auto-reset after 20 messages
-        if self.message_count >= self.max_messages:
-            logger.info("🔄 Auto-reset triggered")
-            await self.stop()
-            await self.start()
-        
-        return output or "Message sent successfully"
+        # Clear any cached data
+        logger.info(f"🔄 Session reset - New ID: {self.session_id}")
+        return True
     
     async def stop(self):
         if self.process:
