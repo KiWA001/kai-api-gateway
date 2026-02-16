@@ -1,7 +1,7 @@
 """
-OpenCode Microservice - Proper Terminal Capture
-===============================================
-Uses pexpect to properly interact with OpenCode TUI
+OpenCode Microservice - Tmux Screen Capture Approach
+====================================================
+Uses tmux to capture terminal output
 """
 
 import asyncio
@@ -10,13 +10,13 @@ import os
 import json
 import random
 import string
-import pexpect
-import time
+import subprocess
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import shutil
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("opencode_microservice")
@@ -33,12 +33,11 @@ app.add_middleware(
 
 class OpenCodeSession:
     def __init__(self):
-        self.process: Optional[pexpect.spawn] = None
+        self.tmux_session = "opencode"
         self.message_count = 0
         self.max_messages = 20
         self.session_id = None
         self.is_running = False
-        self.output_buffer = []
         
     def generate_identity(self):
         return {
@@ -46,8 +45,22 @@ class OpenCodeSession:
             "session_id": ''.join(random.choices(string.hexdigits.lower(), k=16)),
         }
     
+    def run_tmux_cmd(self, cmd):
+        """Run tmux command"""
+        try:
+            result = subprocess.run(
+                ['tmux', '-L', self.tmux_session] + cmd,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.stdout, result.stderr, result.returncode
+        except Exception as e:
+            logger.error(f"Tmux error: {e}")
+            return "", str(e), 1
+    
     async def start(self):
-        """Start fresh OpenCode session with proper terminal"""
+        """Start OpenCode in tmux session"""
         if self.is_running:
             await self.stop()
         
@@ -62,6 +75,9 @@ class OpenCodeSession:
         for path in auth_paths:
             if os.path.exists(path):
                 shutil.rmtree(path, ignore_errors=True)
+        
+        # Kill existing tmux session
+        subprocess.run(['tmux', 'kill-session', '-t', self.tmux_session], capture_output=True)
         
         # Create config
         session_dir = f"/tmp/opencode_micro_{self.session_id}"
@@ -92,48 +108,43 @@ class OpenCodeSession:
             json.dump(config, f, indent=2)
         
         try:
-            # Start OpenCode with pexpect (proper PTY)
-            env = os.environ.copy()
-            env['OPENCODE_CONFIG'] = f"{session_dir}/config.json"
-            env['OPENCODE_NO_AUTH'] = '1'
-            env['TERM'] = 'xterm-256color'
+            # Create tmux session with OpenCode
+            env_vars = f"export OPENCODE_CONFIG={session_dir}/config.json; export OPENCODE_NO_AUTH=1;"
+            cmd = f'{env_vars} npx -y opencode-ai'
             
-            self.process = pexpect.spawn(
-                'npx -y opencode-ai',
-                env=env,
-                timeout=30,
-                maxread=50000,
-                encoding='utf-8',
-                codec_errors='ignore'
-            )
-            
-            # Wait for startup
-            await asyncio.sleep(4)
-            
-            # Wait for TUI to load
-            try:
-                self.process.expect(['OpenCode', 'Ask anything', 'What can I help'], timeout=10)
-            except:
-                pass  # Continue anyway
-            
-            # Select model
-            self.process.sendcontrol('x')
-            await asyncio.sleep(0.5)
-            self.process.send('m')
-            await asyncio.sleep(1)
-            self.process.send('\n')
-            await asyncio.sleep(2)
+            subprocess.Popen([
+                'tmux', 'new-session', '-d', '-s', self.tmux_session,
+                '-c', session_dir,
+                'bash', '-c', cmd
+            ])
             
             self.is_running = True
             self.message_count = 0
-            self.output_buffer = []
             
-            logger.info(f"✅ OpenCode started - Session: {self.session_id}")
+            # Wait for startup
+            await asyncio.sleep(5)
+            
+            # Select model
+            self.run_tmux_cmd(['send-keys', 'C-x'])
+            await asyncio.sleep(0.5)
+            self.run_tmux_cmd(['send-keys', 'm'])
+            await asyncio.sleep(1)
+            self.run_tmux_cmd(['send-keys', 'Enter'])
+            await asyncio.sleep(2)
+            
+            logger.info(f"✅ OpenCode started in tmux - Session: {self.session_id}")
             return True
             
         except Exception as e:
             logger.error(f"Failed to start OpenCode: {e}")
             return False
+    
+    def capture_screen(self):
+        """Capture tmux pane content"""
+        stdout, _, code = self.run_tmux_cmd(['capture-pane', '-p', '-S', '-100'])
+        if code == 0:
+            return stdout
+        return ""
     
     async def chat(self, message: str) -> str:
         """Send message and capture response"""
@@ -143,45 +154,30 @@ class OpenCodeSession:
                 return "Failed to start OpenCode"
         
         try:
-            # Clear any pending output first
-            try:
-                while self.process.readline_nonblocking(size=1000, timeout=0.1):
-                    pass
-            except:
-                pass
+            # Get current screen before message
+            before_screen = self.capture_screen()
+            before_lines = set(before_screen.split('\n'))
             
             # Send message
-            self.process.sendline(message)
+            self.run_tmux_cmd(['send-keys', message])
+            self.run_tmux_cmd(['send-keys', 'Enter'])
             
-            # Wait for response generation (AI needs time)
-            await asyncio.sleep(12)  # Increased wait time
+            # Wait for AI response
+            await asyncio.sleep(15)
             
-            # Read all output with multiple attempts
-            output_parts = []
-            for _ in range(5):  # Try multiple times
-                try:
-                    # Read available output
-                    available = self.process.read_nonblocking(size=10000, timeout=2)
-                    if available:
-                        output_parts.append(available)
-                except pexpect.TIMEOUT:
-                    break
-                except:
-                    break
-                await asyncio.sleep(1)
+            # Get screen after response
+            after_screen = self.capture_screen()
+            after_lines = after_screen.split('\n')
             
-            output = "".join(output_parts)
-            
-            # Clean up output
-            import re
-            # Remove ANSI escape codes
-            clean_output = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', output)
-            # Remove other control characters
-            clean_output = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', clean_output)
-            # Normalize whitespace
-            clean_output = re.sub(r'\r\n', '\n', clean_output)
-            clean_output = re.sub(r'\n+', '\n', clean_output)
-            clean_output = clean_output.strip()
+            # Find new lines (the response)
+            response_lines = []
+            for line in after_lines:
+                line = line.strip()
+                # Skip empty lines, prompts, and old lines
+                if line and line not in before_lines and not line.startswith(('>', '$', '┌', '│', '└', '╭', '╰')):
+                    # Skip the user's question
+                    if message not in line:
+                        response_lines.append(line)
             
             self.message_count += 1
             
@@ -191,36 +187,20 @@ class OpenCodeSession:
                 await self.stop()
                 await self.start()
             
-            # Return last few lines (the response)
-            lines = clean_output.strip().split('\n')
-            # Filter out empty lines and prompts
-            response_lines = [l for l in lines if l.strip() and not l.startswith(('>', '$', '┌', '│', '└'))]
-            
             if response_lines:
-                return '\n'.join(response_lines[-10:])  # Return last 10 lines
+                # Return last few lines (most recent response)
+                return '\n'.join(response_lines[-15:])
             else:
-                return "Response received (check terminal for full output)"
+                # Return full screen if we can't parse
+                return after_screen[-2000:]  # Last 2000 chars
                 
         except Exception as e:
             logger.error(f"Chat error: {e}")
             return f"Error: {str(e)}"
     
     async def stop(self):
-        if self.process:
-            try:
-                self.process.sendline('/exit')
-                await asyncio.sleep(1)
-            except:
-                pass
-            
-            if self.process.isalive():
-                self.process.terminate()
-                await asyncio.sleep(2)
-                if self.process.isalive():
-                    self.process.kill()
-            
-            self.process = None
-        
+        """Stop tmux session"""
+        subprocess.run(['tmux', 'kill-session', '-t', self.tmux_session], capture_output=True)
         self.is_running = False
         self.message_count = 0
         logger.info("🛑 OpenCode stopped")
