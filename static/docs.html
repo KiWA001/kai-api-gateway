@@ -407,6 +407,43 @@
             color: var(--text-muted);
             font-size: 14px;
         }
+
+        /* Copy Button Styles */
+        .copy-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        .copy-btn.copied {
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .example-container {
+            position: relative;
+        }
+
+        .example-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 
@@ -442,12 +479,15 @@
                         </tr>
                     </table>
                     <br>
-                    <span class="demo-label">Example Request</span>
-                    <div class="demo-response visible" style="color: #a78bfa;">
-                        curl https://kiwa001-kai-api-gateway.hf.space/v1/chat/completions \
-                        -H "Content-Type: application/json" \
-                        -H "Authorization: Bearer YOUR_API_KEY" \
-                        -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
+                    <div class="example-header">
+                        <span class="demo-label">Example Request</span>
+                        <button class="copy-btn" onclick="copyExample('ex-chat')">📋 Copy</button>
+                    </div>
+                    <div id="ex-chat" class="demo-response visible" style="color: #a78bfa;">
+curl https://kiwa001-kai-api-gateway.hf.space/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
                     </div>
                     <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
                         <strong>Note:</strong> Replace YOUR_API_KEY with your actual API key from the dashboard above.
@@ -491,10 +531,13 @@
                     <p style="color:var(--text-secondary); font-size:14px;">Returns a JSON list of all models supported
                         by the API, ranked by quality.</p>
                     <br>
-                    <span class="demo-label">Example Request</span>
-                    <div class="demo-response visible" style="color: #a78bfa;">
-                        curl https://kiwa001-kai-api-gateway.hf.space/models \
-                        -H "Authorization: Bearer YOUR_API_KEY"
+                    <div class="example-header">
+                        <span class="demo-label">Example Request</span>
+                        <button class="copy-btn" onclick="copyExample('ex-models')">📋 Copy</button>
+                    </div>
+                    <div id="ex-models" class="demo-response visible" style="color: #a78bfa;">
+curl https://kiwa001-kai-api-gateway.hf.space/models \
+  -H "Authorization: Bearer YOUR_API_KEY"
                     </div>
                 </div>
                 <div class="endpoint-demo">
@@ -539,21 +582,22 @@
                             <button onclick="toggleSearchEx('deep')" id="btn-ex-deep"
                                 style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-muted); font-size:11px; cursor:pointer;">Deep
                                 Research</button>
+                            <button class="copy-btn" onclick="copySearchExample()">📋 Copy</button>
                         </div>
                     </div>
 
                     <div id="ex-code-simple" class="demo-response visible" style="color: #a78bfa;">
-                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/search \
-                        -H "Content-Type: application/json" \
-                        -H "Authorization: Bearer YOUR_API_KEY" \
-                        -d '{"query": "Machine Learning", "limit": 5}'
+curl -X POST https://kiwa001-kai-api-gateway.hf.space/search \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"query": "Machine Learning", "limit": 5}'
                     </div>
 
                     <div id="ex-code-deep" class="demo-response" style="color: #a78bfa; display:none;">
-                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
-                        -H "Content-Type: application/json" \
-                        -H "Authorization: Bearer YOUR_API_KEY" \
-                        -d '{"query": "Future of AI", "limit": 2}'
+curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"query": "Future of AI", "limit": 2}'
                     </div>
                     <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
                         <strong>Note:</strong> Web searches require an API key but are <strong>free</strong> (no token deduction).
@@ -708,6 +752,53 @@
                 simpleBtn.style.borderColor = 'var(--border)';
                 simpleBtn.style.color = 'var(--text-muted)';
             }
+        }
+
+        // Copy function for examples
+        async function copyExample(elementId) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            const text = element.textContent.trim();
+
+            try {
+                await navigator.clipboard.writeText(text);
+                showCopyFeedback(event.target);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        }
+
+        // Copy function for search examples (copies visible one)
+        async function copySearchExample() {
+            const simpleCode = document.getElementById('ex-code-simple');
+            const deepCode = document.getElementById('ex-code-deep');
+
+            let text;
+            if (simpleCode.style.display !== 'none') {
+                text = simpleCode.textContent.trim();
+            } else {
+                text = deepCode.textContent.trim();
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                showCopyFeedback(event.target);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        }
+
+        // Show copy feedback
+        function showCopyFeedback(button) {
+            const originalText = button.textContent;
+            button.textContent = '✓ Copied!';
+            button.classList.add('copied');
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
         }
 
         async function runDemo(type) {
