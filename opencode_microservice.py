@@ -143,47 +143,45 @@ class OpenCodeSession:
                 return "Failed to start OpenCode"
         
         try:
-            # Clear buffer
-            self.output_buffer = []
+            # Clear any pending output first
+            try:
+                while self.process.readline_nonblocking(size=1000, timeout=0.1):
+                    pass
+            except:
+                pass
             
             # Send message
             self.process.sendline(message)
             
-            # Wait for response generation
-            await asyncio.sleep(8)  # Give time for AI to respond
+            # Wait for response generation (AI needs time)
+            await asyncio.sleep(12)  # Increased wait time
             
-            # Read all available output
-            output = ""
-            try:
-                while True:
-                    try:
-                        # Read with short timeout to get all pending output
-                        self.process.expect(['\n', '\r'], timeout=0.5)
-                        line = self.process.before
-                        if line:
-                            output += line + "\n"
-                            self.output_buffer.append(line)
-                    except pexpect.TIMEOUT:
-                        break
-                    except:
-                        break
-            except:
-                pass
+            # Read all output with multiple attempts
+            output_parts = []
+            for _ in range(5):  # Try multiple times
+                try:
+                    # Read available output
+                    available = self.process.read_nonblocking(size=10000, timeout=2)
+                    if available:
+                        output_parts.append(available)
+                except pexpect.TIMEOUT:
+                    break
+                except:
+                    break
+                await asyncio.sleep(1)
             
-            # Also try to get the after match
-            try:
-                remaining = self.process.before
-                if remaining:
-                    output += remaining
-            except:
-                pass
+            output = "".join(output_parts)
             
-            # Clean up output (remove ANSI codes, etc.)
+            # Clean up output
             import re
-            clean_output = re.sub(r'\x1b\[[0-9;]*m', '', output)  # Remove color codes
-            clean_output = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', clean_output)  # Remove cursor codes
-            clean_output = re.sub(r'\r\n', '\n', clean_output)  # Normalize newlines
-            clean_output = re.sub(r'\n+', '\n', clean_output)  # Remove extra newlines
+            # Remove ANSI escape codes
+            clean_output = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', output)
+            # Remove other control characters
+            clean_output = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f]', '', clean_output)
+            # Normalize whitespace
+            clean_output = re.sub(r'\r\n', '\n', clean_output)
+            clean_output = re.sub(r'\n+', '\n', clean_output)
+            clean_output = clean_output.strip()
             
             self.message_count += 1
             
