@@ -1,16 +1,17 @@
 """
-OpenCode Microservice - Minimal AWS Service
-==========================================
-Just handles OpenCode terminal with disposable mode
+OpenCode Microservice - Proper Terminal Capture
+===============================================
+Uses pexpect to properly interact with OpenCode TUI
 """
 
 import asyncio
 import logging
-import subprocess
 import os
 import json
 import random
 import string
+import pexpect
+import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -22,23 +23,22 @@ logger = logging.getLogger("opencode_microservice")
 
 app = FastAPI(title="OpenCode Microservice")
 
-# Allow CORS from HuggingFace
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to your HF space
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global state
 class OpenCodeSession:
     def __init__(self):
-        self.process: Optional[subprocess.Popen] = None
+        self.process: Optional[pexpect.spawn] = None
         self.message_count = 0
         self.max_messages = 20
         self.session_id = None
         self.is_running = False
+        self.output_buffer = []
         
     def generate_identity(self):
         return {
@@ -47,27 +47,21 @@ class OpenCodeSession:
         }
     
     async def start(self):
-        """Start fresh OpenCode session"""
+        """Start fresh OpenCode session with proper terminal"""
         if self.is_running:
             await self.stop()
         
         identity = self.generate_identity()
         self.session_id = identity["session_id"][:8]
         
-        # Cleanup any existing auth
+        # Cleanup
         auth_paths = [
             os.path.expanduser("~/.local/share/opencode"),
             os.path.expanduser("~/.config/opencode"),
-            "/tmp/opencode_session_*",
         ]
-        for path_pattern in auth_paths:
-            try:
-                import glob
-                for p in glob.glob(path_pattern):
-                    if os.path.exists(p):
-                        shutil.rmtree(p, ignore_errors=True)
-            except:
-                pass
+        for path in auth_paths:
+            if os.path.exists(path):
+                shutil.rmtree(path, ignore_errors=True)
         
         # Create config
         session_dir = f"/tmp/opencode_micro_{self.session_id}"
@@ -90,45 +84,49 @@ class OpenCodeSession:
             },
             "model": "opencode-zen/kimi-k2.5-free",
             "autoshare": False,
-            "autoupdate": True,
+            "autoupdate": False,
             "anonymous": True,
-            "deviceId": identity["device_id"],
-            "sessionId": identity["session_id"]
         }
         
         with open(f"{session_dir}/config.json", 'w') as f:
             json.dump(config, f, indent=2)
         
-        # Start OpenCode
-        env = os.environ.copy()
-        env['OPENCODE_CONFIG'] = f"{session_dir}/config.json"
-        env['OPENCODE_NO_AUTH'] = '1'
-        env['TERM_SESSION_ID'] = self.session_id
-        
         try:
-            self.process = subprocess.Popen(
-                ['npx', '-y', 'opencode-ai'],
+            # Start OpenCode with pexpect (proper PTY)
+            env = os.environ.copy()
+            env['OPENCODE_CONFIG'] = f"{session_dir}/config.json"
+            env['OPENCODE_NO_AUTH'] = '1'
+            env['TERM'] = 'xterm-256color'
+            
+            self.process = pexpect.spawn(
+                'npx -y opencode-ai',
                 env=env,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1
+                timeout=30,
+                maxread=50000,
+                encoding='utf-8',
+                codec_errors='ignore'
             )
+            
+            # Wait for startup
+            await asyncio.sleep(4)
+            
+            # Wait for TUI to load
+            try:
+                self.process.expect(['OpenCode', 'Ask anything', 'What can I help'], timeout=10)
+            except:
+                pass  # Continue anyway
+            
+            # Select model
+            self.process.sendcontrol('x')
+            await asyncio.sleep(0.5)
+            self.process.send('m')
+            await asyncio.sleep(1)
+            self.process.send('\n')
+            await asyncio.sleep(2)
             
             self.is_running = True
             self.message_count = 0
-            
-            # Wait for startup
-            await asyncio.sleep(3)
-            
-            # Select model (Ctrl+X then M then Enter)
-            await self.send_key('ctrl+x')
-            await asyncio.sleep(0.5)
-            await self.send_input('m')
-            await asyncio.sleep(1)
-            await self.send_key('return')
-            await asyncio.sleep(1)
+            self.output_buffer = []
             
             logger.info(f"✅ OpenCode started - Session: {self.session_id}")
             return True
@@ -137,187 +135,141 @@ class OpenCodeSession:
             logger.error(f"Failed to start OpenCode: {e}")
             return False
     
-    async def send_input(self, text: str):
-        if self.process and self.process.poll() is None:
-            try:
-                self.process.stdin.write(text + '\n')
-                self.process.stdin.flush()
-                return True
-            except:
-                return False
-        return False
-    
-    async def send_key(self, key: str):
-        if self.process and self.process.poll() is None:
-            try:
-                key_map = {
-                    'return': '\n',
-                    'enter': '\n',
-                    'ctrl+x': '\x18',
-                    'ctrl+c': '\x03',
-                    'tab': '\t',
-                }
-                char = key_map.get(key.lower(), key)
-                self.process.stdin.write(char)
-                self.process.stdin.flush()
-                return True
-            except:
-                return False
-        return False
-    
     async def chat(self, message: str) -> str:
-        """Send message and get response via HTTP API"""
-        import aiohttp
-        
-        # Use OpenCode's HTTP API instead of TUI parsing
-        url = "https://opencode.ai/zen/v1/chat/completions"
+        """Send message and capture response"""
+        if not self.is_running:
+            success = await self.start()
+            if not success:
+                return "Failed to start OpenCode"
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    json={
-                        "model": "opencode-zen/kimi-k2.5-free",
-                        "messages": [{"role": "user", "content": message}],
-                        "stream": False
-                    },
-                    headers={"Content-Type": "application/json"},
-                    timeout=aiohttp.ClientTimeout(total=60)
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if "choices" in data and len(data["choices"]) > 0:
-                            content = data["choices"][0]["message"]["content"]
-                            
-                            # Track message count for disposable mode
-                            self.message_count += 1
-                            
-                            # Auto-reset after 20 messages
-                            if self.message_count >= self.max_messages:
-                                logger.info("🔄 Auto-reset triggered")
-                                await self.reset_session()
-                            
-                            return content
+            # Clear buffer
+            self.output_buffer = []
             
-            return "No response from OpenCode"
+            # Send message
+            self.process.sendline(message)
             
+            # Wait for response generation
+            await asyncio.sleep(8)  # Give time for AI to respond
+            
+            # Read all available output
+            output = ""
+            try:
+                while True:
+                    try:
+                        # Read with short timeout to get all pending output
+                        self.process.expect(['\n', '\r'], timeout=0.5)
+                        line = self.process.before
+                        if line:
+                            output += line + "\n"
+                            self.output_buffer.append(line)
+                    except pexpect.TIMEOUT:
+                        break
+                    except:
+                        break
+            except:
+                pass
+            
+            # Also try to get the after match
+            try:
+                remaining = self.process.before
+                if remaining:
+                    output += remaining
+            except:
+                pass
+            
+            # Clean up output (remove ANSI codes, etc.)
+            import re
+            clean_output = re.sub(r'\x1b\[[0-9;]*m', '', output)  # Remove color codes
+            clean_output = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', clean_output)  # Remove cursor codes
+            clean_output = re.sub(r'\r\n', '\n', clean_output)  # Normalize newlines
+            clean_output = re.sub(r'\n+', '\n', clean_output)  # Remove extra newlines
+            
+            self.message_count += 1
+            
+            # Auto-reset
+            if self.message_count >= self.max_messages:
+                logger.info("🔄 Auto-reset triggered")
+                await self.stop()
+                await self.start()
+            
+            # Return last few lines (the response)
+            lines = clean_output.strip().split('\n')
+            # Filter out empty lines and prompts
+            response_lines = [l for l in lines if l.strip() and not l.startswith(('>', '$', '┌', '│', '└'))]
+            
+            if response_lines:
+                return '\n'.join(response_lines[-10:])  # Return last 10 lines
+            else:
+                return "Response received (check terminal for full output)"
+                
         except Exception as e:
             logger.error(f"Chat error: {e}")
             return f"Error: {str(e)}"
     
-    async def reset_session(self):
-        """Reset session for disposable mode"""
-        # Generate new identity
-        identity = self.generate_identity()
-        self.session_id = identity["session_id"][:8]
-        self.message_count = 0
-        
-        # Clear any cached data
-        logger.info(f"🔄 Session reset - New ID: {self.session_id}")
-        return True
-    
     async def stop(self):
         if self.process:
             try:
-                self.process.stdin.write('/exit\n')
-                self.process.stdin.flush()
+                self.process.sendline('/exit')
                 await asyncio.sleep(1)
             except:
                 pass
             
-            if self.process.poll() is None:
+            if self.process.isalive():
                 self.process.terminate()
                 await asyncio.sleep(2)
-                if self.process.poll() is None:
+                if self.process.isalive():
                     self.process.kill()
             
             self.process = None
         
         self.is_running = False
         self.message_count = 0
-        
-        # Cleanup
-        try:
-            import glob
-            for d in glob.glob("/tmp/opencode_micro_*"):
-                shutil.rmtree(d, ignore_errors=True)
-        except:
-            pass
-        
         logger.info("🛑 OpenCode stopped")
 
 # Global session
 session = OpenCodeSession()
 
-# API Models
 class ChatRequest(BaseModel):
     message: str
     model: str = "kimi-k2.5-free"
 
-class ChatResponse(BaseModel):
-    response: str
-    session_id: str
-    message_count: int
-    max_messages: int
-
-class StatusResponse(BaseModel):
-    is_running: bool
-    message_count: int
-    max_messages: int
-    session_id: Optional[str]
-
 @app.get("/")
 def root():
-    return {"status": "OpenCode Microservice Running", "version": "1.0.0"}
+    return {"status": "OpenCode Microservice Running"}
 
 @app.get("/health")
 def health():
     return {"status": "healthy", "session_active": session.is_running}
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     try:
         response = await session.chat(req.message)
-        return ChatResponse(
-            response=response,
-            session_id=session.session_id or "",
-            message_count=session.message_count,
-            max_messages=session.max_messages
-        )
+        return {
+            "response": response,
+            "session_id": session.session_id or "",
+            "message_count": session.message_count,
+            "max_messages": session.max_messages
+        }
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/status", response_model=StatusResponse)
+@app.get("/status")
 async def status_endpoint():
-    return StatusResponse(
-        is_running=session.is_running,
-        message_count=session.message_count,
-        max_messages=session.max_messages,
-        session_id=session.session_id
-    )
+    return {
+        "is_running": session.is_running,
+        "message_count": session.message_count,
+        "max_messages": session.max_messages,
+        "session_id": session.session_id
+    }
 
 @app.post("/reset")
 async def reset_endpoint():
-    """Manually reset session"""
     await session.stop()
     success = await session.start()
     return {"status": "reset_complete" if success else "reset_failed"}
-
-@app.post("/start")
-async def start_endpoint():
-    """Start OpenCode session"""
-    if session.is_running:
-        return {"status": "already_running"}
-    
-    success = await session.start()
-    return {"status": "started" if success else "failed"}
-
-@app.post("/stop")
-async def stop_endpoint():
-    """Stop OpenCode session"""
-    await session.stop()
-    return {"status": "stopped"}
 
 if __name__ == "__main__":
     import uvicorn
