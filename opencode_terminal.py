@@ -3,6 +3,8 @@ OpenCode Terminal Portal
 -------------------------
 Manages OpenCode terminal TUI as a provider.
 Supports free models: Kimi K2.5 Free, MiniMax M2.5 Free, Big Pickle, GLM 4.7
+
+ANONYMOUS MODE: No credentials stored, fresh device identity each session
 """
 
 import asyncio
@@ -10,11 +12,14 @@ import logging
 import subprocess
 import os
 import json
+import random
+import string
 from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass
 from datetime import datetime
 import threading
 import queue
+import shutil
 
 logger = logging.getLogger("kai_api.terminal_portal")
 
@@ -26,6 +31,15 @@ class TerminalConfig:
     model: str  # e.g., "kimi-k2.5-free", "minimax-m2.5-free"
     project_dir: str = "."
     config_path: str = ".opencode/config.json"
+
+
+def generate_anonymous_identity():
+    """Generate random device identifiers to appear as different device each time."""
+    return {
+        "device_id": ''.join(random.choices(string.hexdigits.lower(), k=32)),
+        "session_id": ''.join(random.choices(string.hexdigits.lower(), k=16)),
+        "fingerprint": ''.join(random.choices(string.hexdigits.lower(), k=24)),
+    }
 
 
 # Free models configuration
@@ -54,7 +68,11 @@ OPENCODE_MODELS = {
 
 
 class OpenCodeTerminalPortal:
-    """Manages OpenCode terminal TUI session."""
+    """Manages OpenCode terminal TUI session with DISPOSABLE mode."""
+    
+    # Disposable mode settings
+    MAX_MESSAGES_BEFORE_RESET = 20  # Auto-reset after 20 messages
+    AUTO_NEW_CHAT_BETWEEN_MESSAGES = True  # Start new chat between each message
     
     def __init__(self, config: TerminalConfig):
         self.config = config
@@ -67,22 +85,49 @@ class OpenCodeTerminalPortal:
         self.screenshot_path = f"/tmp/opencode_{config.model}.png"
         self.last_activity = None
         self._keyboard_active = False
+        self.message_count = 0  # Track messages for auto-reset
+        self.current_identity = None  # Track current session identity
+        self.session_dir = None  # Track current session directory
         
     async def initialize(self):
-        """Initialize OpenCode terminal session."""
+        """Initialize OpenCode terminal session in ANONYMOUS/DISPOSABLE mode."""
         if self.is_initialized:
             return
             
         try:
-            # Restore auth from Supabase if available
-            await self.restore_auth()
-            
             logger.info(f"🚀 Starting OpenCode terminal with model: {self.config.model}")
+            logger.info("🔒 Anonymous mode: No credentials stored, fresh device identity")
+            logger.info("🗑️  Disposable mode: Auto-reset after 20 messages, new chat between messages")
             
-            # Ensure config directory exists
-            os.makedirs(".opencode", exist_ok=True)
+            # Generate fresh anonymous identity
+            self.current_identity = generate_anonymous_identity()
+            identity = self.current_identity
             
-            # Create config file for this model
+            # Create isolated config directory for this session
+            self.session_dir = f"/tmp/opencode_session_{identity['session_id'][:8]}"
+            config_path = f"{self.session_dir}/config.json"
+            os.makedirs(self.session_dir, exist_ok=True)
+            
+            # Remove any existing auth files to ensure anonymous mode
+            auth_paths = [
+                os.path.expanduser("~/.local/share/opencode/auth.json"),
+                os.path.expanduser("~/.local/share/opencode"),
+                ".opencode/auth.json",
+                "/tmp/opencode_auth.json"
+            ]
+            for path in auth_paths:
+                if os.path.exists(path):
+                    try:
+                        if os.path.isfile(path):
+                            os.remove(path)
+                            logger.info(f"🗑️ Removed auth file: {path}")
+                        elif os.path.isdir(path):
+                            shutil.rmtree(path)
+                            logger.info(f"🗑️ Removed auth directory: {path}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove {path}: {e}")
+            
+            # Create anonymous config - NO login required
             config_data = {
                 "$schema": "https://opencode.ai/config.json",
                 "theme": "opencode",
@@ -100,40 +145,25 @@ class OpenCodeTerminalPortal:
                 },
                 "model": f"opencode-zen/{self.config.model}",
                 "autoshare": False,
-                "autoupdate": True
+                "autoupdate": True,
+                # Anonymous mode settings
+                "anonymous": True,
+                "deviceId": identity["device_id"],
+                "sessionId": identity["session_id"]
             }
             
-            # Create config file for this model ONLY if it doesn't exist
-            # This allows the user to run `npx opencode-ai` manually to login/auth
-            if not os.path.exists(self.config.config_path):
-                config_data = {
-                    "$schema": "https://opencode.ai/config.json",
-                    "theme": "opencode",
-                    "provider": {
-                        "opencode-zen": {
-                            "npm": "@ai-sdk/openai-compatible",
-                            "options": {
-                                "baseURL": "https://opencode.ai/zen/v1"
-                            },
-                            "models": {
-                                model: {"name": info["name"]} 
-                                for model, info in OPENCODE_MODELS.items()
-                            }
-                        }
-                    },
-                    "model": f"opencode-zen/{self.config.model}",
-                    "autoshare": False,
-                    "autoupdate": True
-                }
-                
-                with open(self.config.config_path, 'w') as f:
-                    json.dump(config_data, f, indent=2)
-            else:
-                logger.info(f"Using existing config at {self.config.config_path}")
+            with open(config_path, 'w') as f:
+                json.dump(config_data, f, indent=2)
             
-            # Start OpenCode process
+            logger.info(f"✅ Config created at: {config_path}")
+            
+            # Start OpenCode process with custom environment
             env = os.environ.copy()
-            env['OPENCODE_CONFIG'] = os.path.abspath(self.config.config_path)
+            env['OPENCODE_CONFIG'] = os.path.abspath(config_path)
+            # Set random terminal identifier
+            env['TERM_SESSION_ID'] = identity["session_id"]
+            # Prevent any auth persistence
+            env['OPENCODE_NO_AUTH'] = '1'
             
             self.process = subprocess.Popen(
                 ['npx', '-y', 'opencode-ai'],
@@ -141,7 +171,7 @@ class OpenCodeTerminalPortal:
                 env=env,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge stderr into stdout for easier reading
                 text=True,
                 bufsize=1
             )
@@ -152,9 +182,31 @@ class OpenCodeTerminalPortal:
             self.output_thread.start()
             
             self.is_initialized = True
-            logger.info(f"✅ OpenCode terminal ready with {self.config.model}")
+            logger.info(f"✅ OpenCode terminal ready (Anonymous mode)")
+            logger.info(f"🆔 Session ID: {identity['session_id'][:16]}...")
             
-            await asyncio.sleep(2)  # Give it time to start
+            # Wait for startup and send initial commands to select free model
+            await asyncio.sleep(3)
+            
+            # Auto-select the free model (Ctrl+X then M)
+            await self.send_key('ctrl+x')
+            await asyncio.sleep(0.5)
+            await self.send_input('m')
+            await asyncio.sleep(1)
+            
+            # Select model based on config
+            model_map = {
+                "kimi-k2.5-free": "kimi",
+                "minimax-m2.5-free": "minimax",
+                "big-pickle": "big pickle",
+                "glm-4.7": "glm"
+            }
+            model_keyword = model_map.get(self.config.model, "kimi")
+            
+            # Send enter to select default (usually Kimi)
+            await self.send_key('Enter')
+            await asyncio.sleep(0.5)
+            
             await self.take_screenshot()
             
         except Exception as e:
@@ -181,19 +233,137 @@ class OpenCodeTerminalPortal:
         except Exception as e:
             logger.error(f"Error reading output: {e}")
     
-    async def send_input(self, text: str):
-        """Send text input to OpenCode."""
+    async def send_input(self, text: str, is_message: bool = True):
+        """Send text input to OpenCode with disposable mode handling."""
         if not self.process or not self.is_initialized:
             return False
         
         try:
+            # If this is a user message (not a command), handle disposable mode
+            if is_message and self.AUTO_NEW_CHAT_BETWEEN_MESSAGES:
+                # Start a new chat before sending the message
+                await self._start_new_chat()
+                await asyncio.sleep(0.5)
+            
+            # Send the actual message
             self.process.stdin.write(text + '\n')
             self.process.stdin.flush()
             self.last_activity = datetime.now()
+            
+            # Track message count for auto-reset
+            if is_message:
+                self.message_count += 1
+                logger.info(f"📨 Message {self.message_count}/{self.MAX_MESSAGES_BEFORE_RESET}")
+                
+                # Check if we need to auto-reset
+                if self.message_count >= self.MAX_MESSAGES_BEFORE_RESET:
+                    logger.info("🔄 Auto-reset triggered after 20 messages!")
+                    await self._full_reset()
+            
             return True
         except Exception as e:
             logger.error(f"Error sending input: {e}")
             return False
+    
+    async def _start_new_chat(self):
+        """Start a new chat to avoid context carryover."""
+        try:
+            # Send Ctrl+N for new chat (or equivalent command)
+            logger.info("🆕 Starting new chat...")
+            self.process.stdin.write('\x0e')  # Ctrl+N
+            self.process.stdin.flush()
+            await asyncio.sleep(0.3)
+        except Exception as e:
+            logger.warning(f"Could not start new chat: {e}")
+    
+    async def _full_reset(self):
+        """Complete reset: wipe everything and start fresh."""
+        logger.info("🧹 PERFORMING FULL DISPOSABLE RESET...")
+        
+        # 1. Close current session
+        await self.close()
+        
+        # 2. Aggressive cleanup of ALL traces
+        await self._complete_cleanup()
+        
+        # 3. Reset counters
+        self.message_count = 0
+        self.current_identity = None
+        self.session_dir = None
+        
+        # 4. Wait a moment to ensure cleanup
+        await asyncio.sleep(2)
+        
+        # 5. Reinitialize with fresh identity
+        logger.info("🔄 Starting fresh session...")
+        await self.initialize()
+        
+        logger.info("✅ Full reset complete - OpenCode sees a completely new device!")
+    
+    async def _complete_cleanup(self):
+        """Complete cleanup of ALL OpenCode traces."""
+        cleanup_paths = [
+            # Config directories
+            "/tmp/opencode_session_*",
+            os.path.expanduser("~/.local/share/opencode"),
+            os.path.expanduser("~/.config/opencode"),
+            os.path.expanduser("~/.opencode"),
+            ".opencode",
+            
+            # Cache and temp files
+            os.path.expanduser("~/.cache/opencode"),
+            "/tmp/opencode*",
+            "/tmp/.opencode*",
+            
+            # Node/npm cache that might have identifiers
+            os.path.expanduser("~/.npm/_npx/*opencode*"),
+            os.path.expanduser("~/.npm/_logs/*opencode*"),
+            
+            # Any auth files
+            os.path.expanduser("~/.local/share/opencode/auth.json"),
+            "/tmp/opencode_auth.json",
+            "/tmp/kai-opencode-*",
+        ]
+        
+        for path_pattern in cleanup_paths:
+            try:
+                import glob
+                matching_paths = glob.glob(path_pattern)
+                for path in matching_paths:
+                    if os.path.exists(path):
+                        if os.path.isfile(path):
+                            os.remove(path)
+                            logger.info(f"🗑️ Deleted file: {path}")
+                        elif os.path.isdir(path):
+                            shutil.rmtree(path, ignore_errors=True)
+                            logger.info(f"🗑️ Deleted directory: {path}")
+            except Exception as e:
+                logger.warning(f"Cleanup warning for {path_pattern}: {e}")
+        
+        # Clear npm/npx cache
+        try:
+            subprocess.run(["npm", "cache", "clean", "--force"], 
+                         capture_output=True, timeout=10)
+            logger.info("🧹 NPM cache cleared")
+        except Exception as e:
+            logger.warning(f"Could not clear NPM cache: {e}")
+        
+        # Clear any system-level temporary identifiers
+        try:
+            # Clear /tmp of any opencode related files
+            import glob
+            for f in glob.glob("/tmp/*opencode*"):
+                try:
+                    if os.path.isfile(f):
+                        os.remove(f)
+                    elif os.path.isdir(f):
+                        shutil.rmtree(f, ignore_errors=True)
+                except:
+                    pass
+        except:
+            pass
+        
+        logger.info("🧹 Complete cleanup finished - No traces left!")
     
     async def send_key(self, key: str):
         """Send a special key to OpenCode (e.g., 'ctrl+c', 'enter', 'tab')."""
@@ -288,7 +458,7 @@ class OpenCodeTerminalPortal:
         return self.process.poll() is None
     
     async def close(self):
-        """Close the OpenCode terminal."""
+        """Close the OpenCode terminal and cleanup anonymous session."""
         try:
             if self.process:
                 # Send exit command
@@ -309,74 +479,47 @@ class OpenCodeTerminalPortal:
                 self.process = None
             
             self.is_initialized = False
-            logger.info("OpenCode terminal closed")
+            
+            # Cleanup session directory to remove any traces
+            if self.session_dir and os.path.exists(self.session_dir):
+                try:
+                    shutil.rmtree(self.session_dir, ignore_errors=True)
+                    logger.info(f"🧹 Cleaned up session directory: {self.session_dir}")
+                except Exception as e:
+                    logger.warning(f"Session cleanup warning: {e}")
+            
+            # Reset message counter
+            self.message_count = 0
+            
+            logger.info("OpenCode terminal closed (Anonymous session cleaned)")
             
         except Exception as e:
             logger.error(f"Error closing OpenCode: {e}")
 
-    async def restore_auth(self):
-        """Restore auth token from Supabase."""
-        try:
-            from db import get_supabase
-            supabase = get_supabase()
-            if not supabase:
-                return
-
-            # Check if we have auth data in Supabase
-            res = supabase.table("kaiapi_settings").select("value").eq("key", "opencode_auth").execute()
-            if not res.data:
-                return
-
-            auth_data = res.data[0]["value"]
-            
-            # Paths to check/restore
-            paths = [
-                os.path.expanduser("~/.local/share/opencode/auth.json"),
-                # Fallback paths if needed
-            ]
-            
-            for path in paths:
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, 'w') as f:
-                    json.dump(auth_data, f, indent=2)
-            
-            logger.info("✅ Restored OpenCode auth from Supabase")
-            
-        except Exception as e:
-            logger.warning(f"Failed to restore auth from Supabase: {e}")
-
     async def sync_auth(self):
-        """Sync local auth token to Supabase."""
-        try:
-            from db import get_supabase
-            supabase = get_supabase()
-            if not supabase:
-                logger.error("Supabase not configured, cannot sync auth")
-                return False
+        """DEPRECATED: Anonymous mode - no auth to sync."""
+        logger.warning("sync_auth() called but anonymous mode is active - no credentials stored")
+        return False
 
-            # Find auth file
-            auth_path = os.path.expanduser("~/.local/share/opencode/auth.json")
-            if not os.path.exists(auth_path):
-                logger.warning(f"Auth file not found at {auth_path}")
-                return False
-                
-            with open(auth_path, 'r') as f:
-                auth_data = json.load(f)
-                
-            # Save to Supabase
-            supabase.table("kaiapi_settings").upsert({
-                "key": "opencode_auth",
-                "value": auth_data,
-                "updated_at": datetime.now().isoformat()
-            }).execute()
-            
-            logger.info("✅ Synced OpenCode auth to Supabase")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to sync auth to Supabase: {e}")
-            return False
-
+    async def manual_reset(self):
+        """Manually trigger a full disposable reset."""
+        logger.info("🔄 Manual reset requested")
+        await self._full_reset()
+        return True
+    
+    def get_disposable_status(self) -> dict:
+        """Get current disposable mode status."""
+        return {
+            "message_count": self.message_count,
+            "max_messages": self.MAX_MESSAGES_BEFORE_RESET,
+            "messages_remaining": max(0, self.MAX_MESSAGES_BEFORE_RESET - self.message_count),
+            "auto_reset_enabled": True,
+            "new_chat_between_messages": self.AUTO_NEW_CHAT_BETWEEN_MESSAGES,
+            "is_running": self.is_running(),
+            "anonymous_mode": True,
+            "session_dir": self.session_dir,
+            "device_id": self.current_identity["device_id"][:16] + "..." if self.current_identity else None,
+        }
 
 
 class TerminalPortalManager:

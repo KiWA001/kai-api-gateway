@@ -1,0 +1,82 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Deploy to EC2
+      env:
+        PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        echo "$PRIVATE_KEY" > private_key.pem
+        chmod 600 private_key.pem
+        
+        # Create deployment script
+        cat > deploy.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        cd ~/kai-api
+        
+        # Backup current state
+        echo "Creating backup..."
+        cp -r . ../kai-api-backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
+        
+        # Pull latest code
+        echo "Pulling latest code..."
+        git fetch origin
+        git reset --hard origin/main
+        
+        # Activate virtual environment
+        source venv/bin/activate
+        
+        # Install any new dependencies
+        echo "Installing dependencies..."
+        pip install -r requirements.txt
+        
+        # Restart the server
+        echo "Restarting server..."
+        pkill -f uvicorn 2>/dev/null || true
+        sleep 2
+        
+        # Start server in background
+        nohup ./venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 > /tmp/kai-api.log 2>&1 &
+        
+        echo "✅ Deployment complete!"
+        echo "🌐 API: http://$(curl -s ifconfig.me):8000"
+        EOF
+        
+        chmod +x deploy.sh
+        
+        # Copy and execute deployment script on EC2
+        scp -i private_key.pem -o StrictHostKeyChecking=no deploy.sh $USER@$HOST:/tmp/
+        ssh -i private_key.pem -o StrictHostKeyChecking=no $USER@$HOST 'bash /tmp/deploy.sh'
+        
+        rm -f private_key.pem deploy.sh
+    
+    - name: Verify deployment
+      env:
+        HOST: ${{ secrets.EC2_HOST }}
+      run: |
+        echo "Waiting for server to start..."
+        sleep 5
+        
+        # Check if server is responding
+        if curl -s http://$HOST:8000/health > /dev/null 2>&1; then
+          echo "✅ Deployment successful! Server is running."
+          echo "🌐 API: http://$HOST:8000"
+          echo "🔧 Admin: http://$HOST:8000/qazmlp"
+        else
+          echo "⚠️  Server might still be starting. Check manually in a minute."
+          echo "🌐 API: http://$HOST:8000"
+        fi

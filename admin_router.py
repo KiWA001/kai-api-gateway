@@ -1383,3 +1383,46 @@ async def close_terminal(req: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/terminal/reset")
+async def reset_terminal(req: dict):
+    """Manually trigger a full disposable reset (wipes all traces and starts fresh)."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        model = req.get("model", "kimi-k2.5-free")
+        manager = get_terminal_manager()
+        portal = manager.get_portal(model)
+        
+        if not portal.is_running():
+            raise HTTPException(status_code=400, detail="Terminal not running")
+        
+        success = await portal.manual_reset()
+        
+        return {
+            "status": "success" if success else "error",
+            "message": "Full disposable reset completed - OpenCode sees a brand new device!",
+            "model": model
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/terminal/status")
+async def get_terminal_status(model: str = "kimi-k2.5-free"):
+    """Get disposable mode status and message count."""
+    try:
+        from opencode_terminal import get_terminal_manager
+        
+        manager = get_terminal_manager()
+        portal = manager.get_portal(model)
+        
+        status = portal.get_disposable_status()
+        
+        return {
+            "status": "success",
+            "data": status
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

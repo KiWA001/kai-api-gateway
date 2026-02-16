@@ -805,6 +805,28 @@
                 </div>
             </div>
 
+            <!-- Disposable Mode Status Bar (shown only for terminal) -->
+            <div id="disposable-status-bar" style="display:none;padding:10px 16px;background:var(--surface-hover);border-bottom:1px solid var(--border);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <span style="font-size:0.875rem;font-weight:600;">🗑️ Disposable Mode</span>
+                        <span style="font-size:0.75rem;color:var(--text-secondary);">
+                            Messages: <span id="msg-count" style="color:var(--accent);font-weight:600;">0</span>/<span id="msg-max">20</span>
+                        </span>
+                        <div class="progress-bar" style="width:100px;height:6px;">
+                            <div id="msg-progress" class="progress-fill" style="width:0%;background:var(--success);"></div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <span id="next-reset-timer" style="font-size:0.75rem;color:var(--text-secondary);"></span>
+                        <button class="btn btn-secondary" style="padding:4px 12px;font-size:0.75rem;" onclick="manualReset()">🔄 Reset Now</button>
+                    </div>
+                </div>
+                <div style="margin-top:6px;font-size:0.75rem;color:var(--text-secondary);">
+                    🔒 Anonymous • 🆕 New chat between messages • 🧹 Auto-reset after 20 messages
+                </div>
+            </div>
+
             <!-- Browser Interface -->
             <div id="browser-interface" style="display:none;">
                 <!-- Toolbar -->
@@ -821,7 +843,7 @@
 
                     <div class="quality-selector">
                         <span style="font-size:0.75rem;color:var(--text-secondary);">Quality:</span>
-                        <button class="quality-btn active" onclick="setStreamQuality('low')"
+                        <button class="quality-btn active" onclick="setStreamQuality('low')
                             id="quality-low">Low</button>
                         <button class="quality-btn" onclick="setStreamQuality('medium')"
                             id="quality-medium">Med</button>
@@ -1206,9 +1228,15 @@
             // Update controls for terminal
             document.querySelector('.browser-address-bar').style.visibility = 'hidden';
             document.querySelector('.quality-selector').style.visibility = 'hidden';
-            document.getElementById('terminal-sync-btn').style.display = 'inline-block';
+            document.getElementById('terminal-sync-btn').style.display = 'none'; // Hide sync button (anonymous mode)
             document.getElementById('browser-page-title').textContent = 'OpenCode Terminal';
             document.getElementById('browser-coords').textContent = 'Type commands below';
+            
+            // Show disposable mode status bar
+            document.getElementById('disposable-status-bar').style.display = 'block';
+            
+            // Start polling disposable status
+            startDisposableStatusPolling();
         }
 
         async function syncTerminalAuth() {
@@ -1265,6 +1293,98 @@
                     console.error('Terminal poll error:', e);
                 }
             }, 1000);
+        }
+
+        // Disposable Mode Functions
+        let disposableStatusInterval = null;
+
+        function startDisposableStatusPolling() {
+            if (disposableStatusInterval) clearInterval(disposableStatusInterval);
+            
+            // Poll status every 3 seconds
+            disposableStatusInterval = setInterval(async () => {
+                if (currentProvider !== 'opencode') return;
+                
+                try {
+                    const res = await fetch('/qaz/terminal/status?model=kimi-k2.5-free');
+                    const data = await res.json();
+                    
+                    if (data.status === 'success' && data.data) {
+                        updateDisposableStatusUI(data.data);
+                    }
+                } catch (e) {
+                    console.error('Disposable status poll error:', e);
+                }
+            }, 3000);
+            
+            // Initial poll
+            fetch('/qaz/terminal/status?model=kimi-k2.5-free')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success') updateDisposableStatusUI(data.data);
+                })
+                .catch(e => console.error(e));
+        }
+
+        function updateDisposableStatusUI(status) {
+            document.getElementById('msg-count').textContent = status.message_count;
+            document.getElementById('msg-max').textContent = status.max_messages;
+            
+            const progress = (status.message_count / status.max_messages) * 100;
+            const progressBar = document.getElementById('msg-progress');
+            progressBar.style.width = progress + '%';
+            
+            // Change color based on progress
+            if (progress >= 90) {
+                progressBar.style.background = 'var(--error)';
+            } else if (progress >= 70) {
+                progressBar.style.background = 'var(--warning)';
+            } else {
+                progressBar.style.background = 'var(--success)';
+            }
+            
+            const remaining = status.max_messages - status.message_count;
+            document.getElementById('next-reset-timer').textContent = 
+                remaining <= 5 ? `⚠️ Reset in ${remaining} messages!` : `${remaining} messages until reset`;
+        }
+
+        async function manualReset() {
+            if (!confirm('🗑️ This will completely wipe all traces and start fresh. OpenCode will see a brand new device. Continue?')) {
+                return;
+            }
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Resetting...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/qaz/terminal/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: 'kimi-k2.5-free' })
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    btn.textContent = '✅ Reset Complete!';
+                    alert('🗑️ Full disposable reset completed!\n\nOpenCode now sees a completely new device with fresh tokens.');
+                    // Clear terminal view
+                    document.getElementById('terminal-view').innerHTML = '🔄 Session reset - Starting fresh...';
+                } else {
+                    alert('Reset failed: ' + data.message);
+                    btn.textContent = '❌ Error';
+                }
+            } catch (e) {
+                alert('Reset error: ' + e);
+                btn.textContent = '❌ Error';
+            } finally {
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }, 2000);
+            }
         }
 
         function showBrowserInterface() {
