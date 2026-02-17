@@ -14,25 +14,37 @@ Exhaustively tries ALL combinations before giving up.
 # Examples: huggingchat-llama-3.3-70b, zai-glm-5, g4f-gpt-4, gemini-gemini-3-flash
 # -------------------------------------------------------------------
 MODEL_RANKING = [
-    # Tier 1 — Verified Working Models (Best Quality)
+    # Tier 1 — Top Hugging Face Models (Best Quality via Widget)
+    ("hf-kimi-k2.5", "huggingface_widget", "hf-kimi-k2.5"),
+    ("hf-minimax-m2.5", "huggingface_widget", "hf-minimax-m2.5"),
+    ("hf-glm-5", "huggingface_widget", "hf-glm-5"),
+    ("hf-llama-4-scout", "huggingface_widget", "hf-llama-4-scout"),
+    ("hf-llama-4-maverick", "huggingface_widget", "hf-llama-4-maverick"),
+    ("hf-llama-3.3-70b", "huggingface_widget", "hf-llama-3.3-70b"),
+    ("hf-deepseek-v3", "huggingface_widget", "hf-deepseek-v3"),
+    ("hf-qwen3-32b", "huggingface_widget", "hf-qwen3-32b"),
+    ("hf-qwen2.5-72b", "huggingface_widget", "hf-qwen2.5-72b"),
+    ("hf-phi-4", "huggingface_widget", "hf-phi-4"),
+    
+    # Tier 2 — Other Providers
     ("g4f-gpt-4", "g4f", "gpt-4"),
     ("g4f-gpt-4o-mini", "g4f", "gpt-4o-mini"),
     ("zai-glm-5", "zai", "glm-5"),
     ("gemini-gemini-3-flash", "gemini", "gemini-3-flash"),
     
-    # Tier 2 — Pollinations
+    # Tier 3 — Pollinations
     ("pollinations-gpt-oss-20b", "pollinations", "openai"),
     ("pollinations-mistral-small-3.2", "pollinations", "mistral"),
     ("pollinations-bidara", "pollinations", "bidara"),
     ("pollinations-chickytutor", "pollinations", "chickytutor"),
     ("pollinations-midijourney", "pollinations", "midijourney"),
     
-    # Tier 3 — G4F Fallback Models
+    # Tier 4 — G4F Fallback Models
     ("g4f-gpt-3.5-turbo", "g4f", "gpt-3.5-turbo"),
     ("g4f-claude-3-haiku", "g4f", "claude-3-haiku"),
     ("g4f-mixtral-8x7b", "g4f", "mixtral-8x7b"),
     
-    # Tier 4 — OpenCode Terminal Models (Free)
+    # Tier 5 — OpenCode Terminal Models (Free)
     ("opencode-kimi-k2.5-free", "opencode", "kimi-k2.5-free"),
     ("opencode-minimax-m2.5-free", "opencode", "minimax-m2.5-free"),
     ("opencode-big-pickle", "opencode", "big-pickle"),
@@ -75,7 +87,7 @@ PROVIDERS = {
     "zai": {"enabled": True, "name": "Z.ai (GLM-5)", "type": "api"},
     "gemini": {"enabled": True, "name": "Google Gemini", "type": "api"},
     "pollinations": {"enabled": True, "name": "Pollinations", "type": "api"},
-    "huggingchat": {"enabled": True, "name": "HuggingChat", "type": "browser"},
+    "huggingface_widget": {"enabled": True, "name": "Hugging Face Widget", "type": "browser"},
     "copilot": {"enabled": False, "name": "Microsoft Copilot", "type": "browser"},
     "chatgpt": {"enabled": False, "name": "ChatGPT", "type": "browser"},
     "opencode": {"enabled": False, "name": "OpenCode Terminal", "type": "terminal"},
@@ -87,6 +99,18 @@ DEMO_API_KEY = "sk-kai-demo-public"
 # Models per provider (for /models endpoint)
 # All names follow the pattern: {provider}-{model-name}
 PROVIDER_MODELS = {
+    "huggingface_widget": [
+        "hf-kimi-k2.5",
+        "hf-minimax-m2.5",
+        "hf-glm-5",
+        "hf-llama-4-scout",
+        "hf-llama-4-maverick",
+        "hf-llama-3.3-70b",
+        "hf-deepseek-v3",
+        "hf-qwen3-32b",
+        "hf-qwen2.5-72b",
+        "hf-phi-4",
+    ],
     "g4f": [
         "g4f-gpt-4",
         "g4f-gpt-4o-mini",
