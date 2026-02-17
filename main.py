@@ -54,6 +54,7 @@ from models import (
 from services import engine, search_engine
 from v1_router import router as v1_router
 from admin_router import router as admin_router
+from tts_router import router as tts_router
 
 # ---------- Logging ----------
 logging.basicConfig(
@@ -110,6 +111,7 @@ app.add_middleware(
 # Include OpenAI Router
 app.include_router(v1_router)
 app.include_router(admin_router)
+app.include_router(tts_router)
 
 
 # ---------- Admin Routes ----------
