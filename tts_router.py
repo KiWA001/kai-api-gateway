@@ -2,7 +2,7 @@
 TTS Router - 11Labs Compatible API
 ----------------------------------
 Text-to-Speech endpoints compatible with ElevenLabs API structure.
-Uses SpeechMA as the backend provider.
+Uses Kokoro as the backend provider - fast, natural, no CAPTCHA!
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, Response
@@ -14,7 +14,7 @@ import uuid
 import json
 
 from auth import verify_api_key
-from providers.speechma_tts_provider import get_speechma_provider
+from providers.kokoro_tts_provider import get_kokoro_provider
 
 router = APIRouter()
 
@@ -32,16 +32,17 @@ class VoiceSettings(BaseModel):
 class TextToSpeechRequest(BaseModel):
     """11Labs-compatible TTS request."""
     text: str = Field(..., max_length=2000, description="Text to convert to speech")
-    model_id: Optional[str] = Field("eleven_multilingual_v2", description="Model ID (ignored, uses SpeechMA)")
+    model_id: Optional[str] = Field("eleven_multilingual_v2", description="Model ID (ignored, uses Kokoro)")
     voice_settings: Optional[VoiceSettings] = Field(None, description="Voice settings")
     pronunciation_dictionary_locators: Optional[List[Dict[str, str]]] = None
     seed: Optional[int] = None
     previous_text: Optional[str] = None
     language_code: Optional[str] = None
     
-    # SpeechMA-specific fields
-    voice_id: Optional[str] = Field("ava", description="Voice ID to use")
-    output_format: Optional[str] = Field("mp3_44100_128", description="Output format")
+    # Kokoro-specific fields
+    voice_id: Optional[str] = Field("bella", description="Voice ID to use")
+    output_format: Optional[str] = Field("mp3", description="Output format")
+    speed: Optional[float] = Field(1.0, ge=0.5, le=2.0, description="Speech speed")
     optimize_streaming_latency: Optional[int] = Field(0, ge=0, le=4)
 
 
@@ -117,19 +118,20 @@ class UserSubscriptionResponse(BaseModel):
 # --- Helper Functions ---
 
 def format_voice_to_11labs(voice_id: str, voice_info: dict) -> VoiceResponse:
-    """Convert SpeechMA voice to 11Labs format."""
+    """Convert Kokoro voice to 11Labs format."""
     return VoiceResponse(
         voice_id=voice_id,
         name=voice_info["name"],
         category="premade",
         labels={
-            "accent": voice_info.get("country", "Multilingual"),
-            "description": f"{voice_info['gender']} {voice_info['language']} voice",
+            "accent": voice_info.get("accent", "Unknown"),
+            "description": f"{voice_info['gender']} voice",
             "age": "adult",
             "gender": voice_info["gender"].lower(),
-            "use_case": "general"
+            "use_case": "general",
+            "language_code": voice_info.get("language", "en")
         },
-        description=f"{voice_info['gender']} {voice_info['language']} voice from {voice_info.get('country', 'Unknown')}",
+        description=f"{voice_info['gender']} {voice_info.get('accent', 'Unknown')} voice",
         settings=VoiceSettings()
     )
 
@@ -162,8 +164,8 @@ async def list_tts_models(
     models = [
         TTSModelInfo(
             model_id="eleven_multilingual_v2",
-            name="Eleven Multilingual v2",
-            description="Our most advanced multilingual model with highest quality",
+            name="Kokoro Multilingual",
+            description="Fast, natural TTS with Kokoro-82M model",
             can_do_text_to_speech=True,
             can_do_voice_conversion=False,
             can_use_style=True,
@@ -183,14 +185,13 @@ async def list_tts_models(
                 {"language_id": "pt", "name": "Portuguese"},
                 {"language_id": "ja", "name": "Japanese"},
                 {"language_id": "zh", "name": "Chinese"},
-                {"language_id": "ar", "name": "Arabic"},
                 {"language_id": "hi", "name": "Hindi"},
             ]
         ),
         TTSModelInfo(
             model_id="eleven_flash_v2_5",
-            name="Eleven Flash v2.5",
-            description="Ultra-low latency model (~75ms)",
+            name="Kokoro Fast",
+            description="Ultra-fast TTS with lower latency",
             can_do_text_to_speech=True,
             can_do_voice_conversion=False,
             can_use_style=False,
@@ -219,19 +220,13 @@ async def list_voices(
     """
     List all available voices.
     """
-    provider = get_speechma_provider()
+    provider = get_kokoro_provider()
     voices_data = provider.get_available_voices()
     
     voices = []
     for voice_data in voices_data:
         voice_id = voice_data["voice_id"]
-        info = {
-            "name": voice_data["name"],
-            "gender": voice_data["gender"],
-            "language": voice_data["language"],
-            "country": voice_data.get("country", "Unknown")
-        }
-        voices.append(format_voice_to_11labs(voice_id, info))
+        voices.append(format_voice_to_11labs(voice_id, voice_data))
     
     return VoicesListResponse(voices=voices)
 
@@ -244,18 +239,13 @@ async def get_voice(
     """
     Get information about a specific voice.
     """
-    provider = get_speechma_provider()
+    provider = get_kokoro_provider()
     voice_info = provider.get_voice_info(voice_id)
     
     if not voice_info:
         raise HTTPException(status_code=404, detail=f"Voice '{voice_id}' not found")
     
-    return format_voice_to_11labs(voice_info["voice_id"], {
-        "name": voice_info["name"],
-        "gender": voice_info["gender"],
-        "language": voice_info["language"],
-        "country": voice_info.get("country", "Unknown")
-    })
+    return format_voice_to_11labs(voice_info["voice_id"], voice_info)
 
 
 @router.get("/v1/voices/{voice_id}/settings", response_model=VoiceSettings)
@@ -266,7 +256,7 @@ async def get_voice_settings(
     """
     Get default settings for a voice.
     """
-    provider = get_speechma_provider()
+    provider = get_kokoro_provider()
     voice_info = provider.get_voice_info(voice_id)
     
     if not voice_info:
@@ -289,28 +279,25 @@ async def text_to_speech(
     
     Returns audio data as MP3.
     """
-    provider = get_speechma_provider()
+    provider = get_kokoro_provider()
     
     # Validate voice
     voice_info = provider.get_voice_info(voice_id)
     if not voice_info:
         raise HTTPException(status_code=404, detail=f"Voice '{voice_id}' not found")
     
-    # Use provided voice_id or from request
-    actual_voice_id = voice_id
-    
     # Generate speech
     try:
         audio_data = await provider.generate_speech(
             text=request.text,
-            voice_id=actual_voice_id,
-            output_format=request.output_format or "mp3"
+            voice_id=voice_id,
+            speed=request.speed or 1.0
         )
         
         if audio_data is None:
             raise HTTPException(
                 status_code=500, 
-                detail="Failed to generate speech. This could be due to CAPTCHA issues or site changes."
+                detail="Failed to generate speech."
             )
         
         # Return audio with proper headers
@@ -341,11 +328,8 @@ async def text_to_speech_stream(
 ):
     """
     Convert text to speech with streaming response.
-    
-    Note: Since SpeechMA generates complete audio files, 
-    this returns the full audio as a stream.
     """
-    provider = get_speechma_provider()
+    provider = get_kokoro_provider()
     
     # Validate voice
     voice_info = provider.get_voice_info(voice_id)
@@ -356,7 +340,7 @@ async def text_to_speech_stream(
         audio_data = await provider.generate_speech(
             text=request.text,
             voice_id=voice_id,
-            output_format=request.output_format or "mp3"
+            speed=request.speed or 1.0
         )
         
         if audio_data is None:
@@ -390,31 +374,27 @@ async def text_to_speech_stream(
         )
 
 
-# Additional SpeechMA-specific endpoints
+# Kokoro-specific endpoints
 
-@router.post("/v1/tts/speechma")
-async def speechma_tts(
+@router.post("/v1/tts/kokoro")
+async def kokoro_tts(
     request: Request,
     key_data: dict = Depends(verify_api_key)
 ):
     """
-    Direct SpeechMA TTS endpoint with custom options.
+    Direct Kokoro TTS endpoint with custom options.
     
     Body: {
         "text": "Hello world",
-        "voice_id": "ava",
-        "pitch": 0,
-        "speed": 0,
-        "volume": 100
+        "voice_id": "bella",
+        "speed": 1.0
     }
     """
     data = await request.json()
     
     text = data.get("text")
-    voice_id = data.get("voice_id", "ava")
-    pitch = data.get("pitch", 0)
-    speed = data.get("speed", 0)
-    volume = data.get("volume", 100)
+    voice_id = data.get("voice_id", "bella")
+    speed = data.get("speed", 1.0)
     
     if not text:
         raise HTTPException(status_code=400, detail="Text is required")
@@ -422,7 +402,7 @@ async def speechma_tts(
     if len(text) > 2000:
         raise HTTPException(status_code=400, detail="Text exceeds 2000 character limit")
     
-    provider = get_speechma_provider()
+    provider = get_kokoro_provider()
     
     # Validate voice
     voice_info = provider.get_voice_info(voice_id)
@@ -433,15 +413,13 @@ async def speechma_tts(
         audio_data = await provider.generate_speech(
             text=text,
             voice_id=voice_id,
-            pitch=pitch,
-            speed=speed,
-            volume=volume
+            speed=speed
         )
         
         if audio_data is None:
             raise HTTPException(
                 status_code=500, 
-                detail="Failed to generate speech. This could be due to CAPTCHA issues."
+                detail="Failed to generate speech."
             )
         
         return Response(
@@ -460,20 +438,22 @@ async def speechma_tts(
         )
 
 
-@router.get("/v1/tts/speechma/voices")
-async def speechma_voices(
+@router.get("/v1/tts/kokoro/voices")
+async def kokoro_voices(
     key_data: dict = Depends(verify_api_key)
 ):
     """
-    Get all available SpeechMA voices with full details.
+    Get all available Kokoro voices with full details.
     """
-    provider = get_speechma_provider()
+    provider = get_kokoro_provider()
     voices = provider.get_available_voices()
     
     return JSONResponse({
         "voices": voices,
         "count": len(voices),
-        "default_voice": "ava"
+        "default_voice": "bella",
+        "provider": "kokoro",
+        "description": "Fast, natural TTS powered by Kokoro-82M"
     })
 
 
@@ -483,18 +463,20 @@ async def tts_health_check():
     Check if TTS service is healthy.
     """
     try:
-        provider = get_speechma_provider()
+        provider = get_kokoro_provider()
         is_healthy = await provider.health_check()
         
         return JSONResponse({
             "status": "healthy" if is_healthy else "unhealthy",
-            "provider": "speechma",
+            "provider": "kokoro",
+            "model": "Kokoro-82M",
+            "description": "Fast, natural text-to-speech",
             "timestamp": time.time()
         })
     except Exception as e:
         return JSONResponse({
             "status": "unhealthy",
-            "provider": "speechma",
+            "provider": "kokoro",
             "error": str(e),
             "timestamp": time.time()
         }, status_code=503)

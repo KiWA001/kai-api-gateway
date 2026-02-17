@@ -621,7 +621,7 @@ curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
             <div class="endpoint-header">
                 <div class="endpoint-title">
                     <h3>Text-to-Speech</h3>
-                    <p>Convert text to natural-sounding speech using SpeechMA. Supports 20+ voices.</p>
+                    <p>Convert text to natural-sounding speech using Kokoro AI. Fast, high-quality, no CAPTCHA!</p>
                 </div>
                 <span class="method-badge">POST /v1/text-to-speech</span>
             </div>
@@ -635,7 +635,11 @@ curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
                         </tr>
                         <tr>
                             <td><span class="param-name">voice_id</span></td>
-                            <td><span class="param-desc">Voice to use (ava, andrew, brian, etc.)</span><span class="param-req">(optional)</span></td>
+                            <td><span class="param-desc">Voice to use (bella, michael, emma, etc.)</span><span class="param-req">(optional)</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name">speed</span></td>
+                            <td><span class="param-desc">Speech speed (0.5 - 2.0)</span><span class="param-req">(optional)</span></td>
                         </tr>
                     </table>
                     <br>
@@ -644,41 +648,32 @@ curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
                         <button class="copy-btn" onclick="copyExample('ex-tts')">📋 Copy</button>
                     </div>
                     <div id="ex-tts" class="demo-response visible" style="color: #a78bfa;">
-curl -X POST https://kiwa001-kai-api-gateway.hf.space/v1/text-to-speech/ava \
+curl -X POST https://kiwa001-kai-api-gateway.hf.space/v1/text-to-speech/bella \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"text": "Hello! This is a test of the text to speech API."}' \
+  -d '{"text": "Hello! This is Bella with a natural American accent."}' \
   --output speech.mp3
                     </div>
                     <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
-                        <strong>Default Voice:</strong> Ava Multilingual (Female, US)<br>
-                        <strong>Available Voices:</strong> ava, andrew, brian, emma, remy, vivienne, daniel, serena, matthew, jane, and more.
+                        <strong>Default Voice:</strong> Bella (Female, American) - Natural & Expressive<br>
+                        <strong>Powered by:</strong> Kokoro-82M - Fast, natural TTS with 24kHz quality
                     </p>
                 </div>
                 <div class="endpoint-demo">
                     <span class="demo-label">Try It Live</span>
-                    <textarea id="tts-input" class="demo-input" rows="3" placeholder="Enter text to convert to speech...">Hello! Welcome to K-AI API text-to-speech. This is Ava speaking.</textarea>
+                    <textarea id="tts-input" class="demo-input" rows="3" placeholder="Enter text to convert to speech...">Hello! I'm Bella, your AI assistant with a natural American accent. I can speak English, Spanish, French, Japanese, and more!</textarea>
                     
                     <select id="tts-voice" class="demo-select">
-                        <option value="ava" selected>Ava (Female, US) - Default</option>
-                        <option value="andrew">Andrew (Male, US)</option>
-                        <option value="brian">Brian (Male, US)</option>
-                        <option value="emma">Emma (Female, UK)</option>
-                        <option value="remy">Remy (Male, France)</option>
-                        <option value="vivienne">Vivienne (Female, US)</option>
-                        <option value="daniel">Daniel (Male, UK)</option>
-                        <option value="serena">Serena (Female, US)</option>
-                        <option value="matthew">Matthew (Male, US)</option>
-                        <option value="jane">Jane (Female, US)</option>
-                        <option value="alfonso">Alfonso (Male, Spain)</option>
-                        <option value="mario">Mario (Male, Italy)</option>
-                        <option value="klaus">Klaus (Male, Germany)</option>
-                        <option value="sakura">Sakura (Female, Japan)</option>
-                        <option value="xin">Xin (Female, China)</option>
-                        <option value="jose">Jose (Male, Brazil)</option>
-                        <option value="ines">Ines (Female, Portugal)</option>
-                        <option value="amira">Amira (Female, Saudi Arabia)</option>
-                        <option value="fatima">Fatima (Female, UAE)</option>
+                        <option value="bella" selected>Bella (Female, American) - Best Quality</option>
+                        <option value="sarah">Sarah (Female, American)</option>
+                        <option value="michael">Michael (Male, American)</option>
+                        <option value="adam">Adam (Male, American)</option>
+                        <option value="emma">Emma (Female, British)</option>
+                        <option value="george">George (Male, British)</option>
+                        <option value="sofia">Sofia (Female, Spanish)</option>
+                        <option value="jean">Jean (Male, French)</option>
+                        <option value="sakura">Sakura (Female, Japanese)</option>
+                        <option value="li">Li (Female, Chinese)</option>
                     </select>
                     
                     <button class="demo-btn" id="tts-generate-btn" onclick="generateTTS()">Generate Speech ▶</button>
@@ -1037,7 +1032,7 @@ curl -X POST https://kiwa001-kai-api-gateway.hf.space/v1/text-to-speech/ava \
             generateBtn.textContent = 'Generating... ⏳';
             
             statusBox.style.display = 'block';
-            statusBox.innerHTML = 'Sending request to SpeechMA... <span style="opacity: 0.7;">(Solving CAPTCHA)</span>';
+            statusBox.innerHTML = 'Generating with Kokoro AI... <span style="opacity: 0.7;">(Fast & Natural)</span>';
             statusBox.style.color = 'var(--text-muted)';
 
             const startTime = Date.now();
@@ -1106,7 +1101,7 @@ curl -X POST https://kiwa001-kai-api-gateway.hf.space/v1/text-to-speech/ava \
                     <div style="margin-bottom:5px; font-weight:bold;">Error Generating Speech</div>
                     <div style="font-size: 12px; opacity: 0.9;">${err.message}</div>
                     <div style="margin-top: 8px; font-size: 11px; opacity: 0.7;">
-                        Tip: This might be due to CAPTCHA issues. Try refreshing the page.
+                        Tip: Check that Kokoro is properly installed (pip install kokoro soundfile)
                     </div>
                 `;
             } finally {

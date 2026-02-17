@@ -6,6 +6,11 @@ httpx>=0.25.0
 pydantic>=2.0
 supabase>=2.0.0
 Pillow>=10.0.0
+
+# Text-to-Speech (Kokoro - Fast, Natural, No CAPTCHA)
+kokoro>=0.3.0
+soundfile>=0.12.0
+
 # Search Engine
 requests>=2.31.0
 beautifulsoup4>=4.12.0
