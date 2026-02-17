@@ -2,11 +2,11 @@
 Hugging Face Widget Provider (Mini Chat)
 ----------------------------------------
 Uses Playwright to interact with the mini chat widget on Hugging Face model pages.
-Much faster than HuggingChat as it uses the embedded inference widget.
+The widget is often in an iframe, so we need to handle that.
 
 Strategy:
 - Single persistent browser instance
-- Navigate to model page and use the mini chat widget
+- Navigate to model page and use the mini chat widget (in iframe)
 - Start new chat by clearing/refreshing the widget
 - Supports 10+ popular models
 """
@@ -24,6 +24,7 @@ _playwright = None
 _browser = None
 _context = None
 _lock = asyncio.Lock()
+_is_initialized = False
 
 # Hugging Face credentials (same as HuggingChat)
 HF_USERNAME = "one@bo5.store"
@@ -48,8 +49,8 @@ POPULAR_MODELS = {
 class HuggingFaceWidgetProvider(BaseProvider):
     """AI provider using Hugging Face model mini chat widgets."""
 
-    RESPONSE_TIMEOUT = 60
-    HYDRATION_DELAY = 1.5
+    RESPONSE_TIMEOUT = 90
+    HYDRATION_DELAY = 2.0
 
     @property
     def name(self) -> str:
@@ -161,6 +162,24 @@ class HuggingFaceWidgetProvider(BaseProvider):
         finally:
             await page.close()
 
+    async def _find_widget_frame(self, page):
+        """Find the iframe containing the chat widget."""
+        # HF widgets are often in iframes
+        frames = page.frames
+        
+        for frame in frames:
+            try:
+                # Check if this frame has the widget
+                widget = await frame.query_selector('textarea, [contenteditable="true"], .chat-input')
+                if widget:
+                    logger.info(f"HF Widget: Found widget in frame: {frame.url[:60]}...")
+                    return frame
+            except:
+                continue
+        
+        # If no iframe found, use main page
+        return page
+
     async def send_message(
         self,
         prompt: str,
@@ -198,73 +217,121 @@ class HuggingFaceWidgetProvider(BaseProvider):
             # Handle cookie consent if present
             try:
                 cookie_btn = await page.wait_for_selector(
-                    'button:has-text("Accept"), button:has-text("I agree")', 
+                    'button:has-text("Accept"), button:has-text("Accept all"), button:has-text("I agree")', 
                     timeout=3000
                 )
                 if cookie_btn:
                     await cookie_btn.click()
                     await asyncio.sleep(0.5)
+                    logger.info("HF Widget: Accepted cookies")
             except:
                 pass
 
-            # Find the mini chat widget input
-            # Try multiple selectors for different widget versions
+            # Scroll down to load the widget
+            logger.info("HF Widget: Scrolling to find widget...")
+            await page.evaluate("window.scrollTo(0, 600)")
+            await asyncio.sleep(2)
+
+            # Find the widget frame (might be in iframe)
+            widget_frame = await self._find_widget_frame(page)
+            
+            # Find the input field in the widget
             input_selectors = [
-                '[data-target="WidgetChatInput"] textarea',
-                '.inference-widget textarea',
-                '[data-target="InferenceWidget"] textarea',
-                'textarea[placeholder*="chat"]',
-                'textarea[placeholder*="message"]',
-                '.widget-container textarea',
-                '[class*="chat-input"] textarea',
+                'textarea[placeholder*="message" i]',
+                'textarea[placeholder*="chat" i]',
+                'textarea[placeholder*="ask" i]',
+                'textarea',
+                '[contenteditable="true"]',
+                '[role="textbox"]',
+                'input[type="text"]',
+                '.chat-input',
+                '[class*="input"]',
             ]
 
-            input_selector = None
+            input_element = None
             for sel in input_selectors:
                 try:
-                    el = await page.wait_for_selector(sel, timeout=2000)
+                    if widget_frame == page:
+                        el = await page.wait_for_selector(sel, timeout=2000)
+                    else:
+                        el = await widget_frame.wait_for_selector(sel, timeout=2000)
+                    
                     if el:
-                        input_selector = sel
-                        logger.info(f"HF Widget: Found input using {sel}")
+                        input_element = el
+                        logger.info(f"HF Widget: Found input using: {sel}")
                         break
                 except:
                     continue
 
-            if not input_selector:
-                # Try to scroll to find the widget
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.3)")
-                await asyncio.sleep(1)
+            if not input_element:
+                # Try scrolling more and try again
+                await page.evaluate("window.scrollTo(0, 1000)")
+                await asyncio.sleep(2)
                 
-                # Try again
                 for sel in input_selectors:
                     try:
-                        el = await page.wait_for_selector(sel, timeout=3000)
+                        if widget_frame == page:
+                            el = await page.wait_for_selector(sel, timeout=3000)
+                        else:
+                            el = await widget_frame.wait_for_selector(sel, timeout=3000)
+                        
                         if el:
-                            input_selector = sel
+                            input_element = el
+                            logger.info(f"HF Widget: Found input on retry using: {sel}")
                             break
                     except:
                         continue
 
-            if not input_selector:
-                raise RuntimeError("Could not find chat widget input")
+            if not input_element:
+                raise RuntimeError("Could not find chat widget input field")
 
-            # Clear any existing conversation (start fresh)
-            await self._clear_chat(page)
+            # Clear any existing conversation
+            await self._clear_chat(widget_frame or page)
 
             # Type message
             full_prompt = prompt
             if system_prompt:
                 full_prompt = f"[System: {system_prompt}]\n\n{prompt}"
 
-            await page.fill(input_selector, full_prompt)
-            await asyncio.sleep(0.3)
+            await input_element.fill(full_prompt)
+            await asyncio.sleep(0.5)
 
-            # Submit (usually Enter key)
-            await page.keyboard.press("Enter")
+            # Submit - try multiple methods
+            submitted = False
+            
+            # Method 1: Look for send button
+            send_selectors = [
+                'button[type="submit"]',
+                'button:has-text("Send")',
+                'button:has([aria-label*="send"])',
+                '[class*="send"]',
+                'button svg',  # Often just an icon button
+            ]
+            
+            for sel in send_selectors:
+                try:
+                    if widget_frame == page:
+                        send_btn = await page.query_selector(sel)
+                    else:
+                        send_btn = await widget_frame.query_selector(sel)
+                    
+                    if send_btn:
+                        await send_btn.click()
+                        submitted = True
+                        logger.info("HF Widget: Clicked send button")
+                        break
+                except:
+                    continue
+            
+            # Method 2: Press Enter
+            if not submitted:
+                await input_element.press("Enter")
+                logger.info("HF Widget: Pressed Enter to submit")
+
             logger.info("HF Widget: Message sent, waiting for response...")
 
             # Wait for response
-            response_text = await self._wait_for_response(page)
+            response_text = await self._wait_for_response(widget_frame or page)
 
             if not response_text:
                 raise ValueError("Empty response from model")
@@ -282,7 +349,7 @@ class HuggingFaceWidgetProvider(BaseProvider):
         finally:
             await page.close()
 
-    async def _clear_chat(self, page):
+    async def _clear_chat(self, frame):
         """Clear existing chat to start fresh conversation."""
         try:
             # Look for clear/new chat button
@@ -290,13 +357,14 @@ class HuggingFaceWidgetProvider(BaseProvider):
                 'button:has-text("Clear")',
                 'button:has-text("New")',
                 'button:has-text("Reset")',
-                '[data-target="ClearChat"]',
-                '[class*="clear-chat"]',
+                '[class*="clear"]',
+                '[class*="new-chat"]',
+                'button svg[data-icon*="trash"]',
             ]
 
             for sel in clear_selectors:
                 try:
-                    btn = await page.wait_for_selector(sel, timeout=2000)
+                    btn = await frame.wait_for_selector(sel, timeout=2000)
                     if btn:
                         await btn.click()
                         logger.info("HF Widget: Cleared previous chat")
@@ -305,76 +373,99 @@ class HuggingFaceWidgetProvider(BaseProvider):
                 except:
                     continue
 
-            # If no clear button, refresh the page to start fresh
-            logger.info("HF Widget: Refreshing page for new chat")
-            await page.reload()
-            await asyncio.sleep(1.5)
-
         except Exception as e:
             logger.warning(f"HF Widget: Could not clear chat: {e}")
 
-    async def _wait_for_response(self, page) -> str:
+    async def _wait_for_response(self, frame) -> str:
         """Wait for and extract response from widget."""
         last_text = ""
         stable_count = 0
-        required_stable = 2
+        required_stable = 3  # Need more stability for HF widgets
 
         for i in range(self.RESPONSE_TIMEOUT * 2):
             await asyncio.sleep(0.5)
 
             # Check if still loading/generating
-            is_loading = await page.evaluate("""
-                () => {
-                    const loading = document.querySelectorAll(
-                        '[class*="loading"], [class*="spinner"], [class*="animate-pulse"], ' +
-                        '[data-loading="true"], .generating'
-                    );
-                    return loading.length > 0;
-                }
-            """)
-
-            if is_loading:
-                continue
-
-            # Extract response text
-            current_text = await page.evaluate("""
-                () => {
-                    // Try different selectors for the assistant response
-                    const selectors = [
-                        '[data-target="WidgetMessage"][data-role="assistant"]',
-                        '.widget-message.assistant',
-                        '[data-role="assistant"] .message-content',
-                        '.inference-widget [data-message-role="assistant"]',
-                        '.chat-message.assistant',
-                        '[class*="assistant"] [class*="content"]',
-                        '.widget-container .response',
-                    ];
-                    
-                    for (const sel of selectors) {
-                        const els = document.querySelectorAll(sel);
-                        if (els.length > 0) {
-                            // Get the last response
-                            const last = els[els.length - 1];
-                            const text = last.innerText || last.textContent || '';
-                            if (text.trim().length > 5) return text.trim();
-                        }
+            try:
+                is_loading = await frame.evaluate("""
+                    () => {
+                        const loading = document.querySelectorAll(
+                            '[class*="loading" i], [class*="spinner" i], [class*="animate" i], ' +
+                            '[data-loading="true"], .generating, [class*="streaming" i]'
+                        );
+                        return loading.length > 0;
                     }
-                    
-                    // Fallback: look for any non-user message
-                    const allMessages = document.querySelectorAll('.message, .chat-message, [class*="message"]');
-                    for (const msg of allMessages) {
-                        const isUser = msg.classList.contains('user') || 
-                                      msg.getAttribute('data-role') === 'user' ||
-                                      msg.querySelector('.user');
-                        if (!isUser) {
-                            const text = msg.innerText || msg.textContent || '';
-                            if (text.trim().length > 10) return text.trim();
+                """)
+
+                if is_loading:
+                    continue
+            except:
+                pass
+
+            # Extract response text from the widget specifically
+            try:
+                current_text = await frame.evaluate("""
+                    () => {
+                        // HF widgets often have a specific structure - look for the chat container first
+                        const widgetContainers = [
+                            document.querySelector('.inference-widget'),
+                            document.querySelector('[data-target="InferenceWidget"]'),
+                            document.querySelector('.widget-container'),
+                            document.querySelector('[class*="widget"]'),
+                        ].filter(Boolean);
+                        
+                        // Search within widget containers first
+                        for (const container of widgetContainers) {
+                            // Look for assistant responses within the widget
+                            const assistantMsgs = container.querySelectorAll('[data-role="assistant"], .assistant-message, .ai-message, [class*="assistant"]');
+                            if (assistantMsgs.length > 0) {
+                                const last = assistantMsgs[assistantMsgs.length - 1];
+                                const text = last.innerText || last.textContent || '';
+                                if (text.trim().length > 10 && !text.includes('Changelog')) return text.trim();
+                            }
+                            
+                            // Look for message bubbles
+                            const messages = container.querySelectorAll('.message, [class*="message"]');
+                            for (let i = messages.length - 1; i >= 0; i--) {
+                                const msg = messages[i];
+                                // Check if it's not a user message
+                                const isUser = msg.classList.contains('user') || 
+                                              msg.getAttribute('data-role') === 'user' ||
+                                              msg.querySelector('.user, [data-role="user"]') !== null;
+                                if (!isUser) {
+                                    const text = msg.innerText || msg.textContent || '';
+                                    // Filter out model card content
+                                    if (text.trim().length > 10 && 
+                                        !text.includes('Changelog') && 
+                                        !text.includes('Model Introduction') &&
+                                        !text.includes('Parameters') &&
+                                        !text.includes('Architecture')) {
+                                        return text.trim();
+                                    }
+                                }
+                            }
                         }
+                        
+                        // Last resort: look for recently added content
+                        const allDivs = document.querySelectorAll('div');
+                        for (let i = allDivs.length - 1; i >= Math.max(0, allDivs.length - 20); i--) {
+                            const div = allDivs[i];
+                            const text = div.innerText || div.textContent || '';
+                            if (text.trim().length > 20 && 
+                                text.trim().length < 500 && // Reasonable response length
+                                !text.includes('Changelog') &&
+                                !text.includes('License') &&
+                                !text.includes('Parameters') &&
+                                !div.querySelector('h1, h2, h3, table')) { // Not a header or table
+                                return text.trim();
+                            }
+                        }
+                        
+                        return '';
                     }
-                    
-                    return '';
-                }
-            """)
+                """)
+            except:
+                current_text = ""
 
             if not current_text:
                 continue
@@ -404,7 +495,9 @@ class HuggingFaceWidgetProvider(BaseProvider):
         # Remove common artifacts
         clean = re.sub(r"\n+\s*\n+", "\n\n", clean)
         clean = re.sub(r"^User:\s*", "", clean, flags=re.IGNORECASE)
+        clean = re.sub(r"^You:\s*", "", clean, flags=re.IGNORECASE)
         clean = re.sub(r"^Assistant:\s*", "", clean, flags=re.IGNORECASE)
+        clean = re.sub(r"^AI:\s*", "", clean, flags=re.IGNORECASE)
         return clean.strip()
 
     async def health_check(self) -> bool:

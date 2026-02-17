@@ -75,6 +75,33 @@ class SpeechMATTSProvider:
         """Return all available voices."""
         return [{"voice_id": vid, **info} for vid, info in SPEECHMA_VOICES.items()]
     
+    async def _handle_cookie_consent(self, page: Page):
+        """Handle cookie consent popup if present."""
+        try:
+            # Look for common cookie consent buttons
+            consent_selectors = [
+                'button:has-text("Accept")',
+                'button:has-text("I agree")',
+                'button:has-text("Allow")',
+                'button:has-text("Continue")',
+                '.fc-button:has-text("Accept")',
+                '[class*="consent"] button',
+                '[class*="cookie"] button',
+            ]
+            
+            for selector in consent_selectors:
+                try:
+                    btn = await page.wait_for_selector(selector, timeout=2000)
+                    if btn:
+                        await btn.click()
+                        print("Cookie consent accepted")
+                        await asyncio.sleep(0.5)
+                        return
+                except:
+                    continue
+        except:
+            pass
+    
     async def _extract_captcha_code(self, page: Page) -> Optional[str]:
         """
         Extract CAPTCHA code from the image using OCR.
@@ -96,6 +123,9 @@ class SpeechMATTSProvider:
                 base64_data = src.split(',')[1]
                 image_data = base64.b64decode(base64_data)
             else:
+                # It's a relative URL, construct full URL
+                if src.startswith('/'):
+                    src = f"https://speechma.com{src}"
                 # Otherwise download it
                 import aiohttp
                 async with aiohttp.ClientSession() as session:
@@ -137,26 +167,35 @@ class SpeechMATTSProvider:
             voice_info = self.get_voice_info(voice_id)
             voice_name = voice_info["name"]
             
+            # Handle any popup that might block clicking
+            await self._handle_cookie_consent(page)
+            
             # Wait for voice selection area to load
             await page.wait_for_selector('[class*="voice"]', timeout=10000)
             
-            # Find the voice card by name
-            voice_selector = f'text={voice_name}'
-            voice_element = await page.query_selector(voice_selector)
-            
-            if voice_element:
-                await voice_element.click()
-                await asyncio.sleep(0.5)
-                return True
+            # Try clicking by text content
+            try:
+                # Use XPath for text matching
+                voice_xpath = f'//*[contains(text(), "{voice_name}")]'
+                voice_element = await page.wait_for_selector(f'xpath={voice_xpath}', timeout=5000)
+                if voice_element:
+                    await voice_element.click(force=True)  # Force click to bypass overlay
+                    await asyncio.sleep(0.5)
+                    return True
+            except:
+                pass
             
             # Try alternative selectors
             voice_cards = await page.query_selector_all('[class*="voice-card"], [class*="voice-item"], div[class*="voice"]')
             for card in voice_cards:
-                text = await card.inner_text()
-                if voice_name.lower() in text.lower():
-                    await card.click()
-                    await asyncio.sleep(0.5)
-                    return True
+                try:
+                    text = await card.inner_text()
+                    if voice_name.lower() in text.lower():
+                        await card.click(force=True)
+                        await asyncio.sleep(0.5)
+                        return True
+                except:
+                    continue
             
             return False
             
@@ -242,13 +281,36 @@ class SpeechMATTSProvider:
                 
                 # Navigate to SpeechMA
                 await page.goto(self.base_url, wait_until='networkidle', timeout=60000)
-                await asyncio.sleep(2)  # Wait for page to fully load
+                await asyncio.sleep(3)  # Wait for page to fully load (including any popups)
                 
-                # Enter text
-                text_area = await page.wait_for_selector('textarea[placeholder*="text"], textarea[name*="text"], #text-input', timeout=10000)
+                # Handle cookie consent popup
+                await self._handle_cookie_consent(page)
+                
+                # Enter text - use a more robust selector
+                text_area = None
+                text_selectors = [
+                    'textarea[placeholder*="text" i]',
+                    'textarea[name*="text" i]',
+                    '#text-input',
+                    'textarea',
+                    '[contenteditable*="true"]',
+                ]
+                
+                for selector in text_selectors:
+                    try:
+                        text_area = await page.wait_for_selector(selector, timeout=5000)
+                        if text_area:
+                            print(f"Found text area with selector: {selector}")
+                            break
+                    except:
+                        continue
+                
                 if not text_area:
                     raise Exception("Could not find text input area")
                 
+                # Clear and fill
+                await text_area.fill("")
+                await asyncio.sleep(0.2)
                 await text_area.fill(text)
                 await asyncio.sleep(0.5)
                 
@@ -270,27 +332,44 @@ class SpeechMATTSProvider:
                     captcha_code = await self._extract_captcha_code(page)
                     
                     if captcha_code and len(captcha_code) == 5:
-                        # Enter CAPTCHA
-                        captcha_input = await page.query_selector('input[placeholder*="captcha"], input[name*="captcha"], #captcha-input')
+                        print(f"CAPTCHA code extracted: {captcha_code}")
+                        # Enter CAPTCHA - find input fresh each time
+                        captcha_selectors = [
+                            'input[placeholder*="captcha" i]',
+                            'input[name*="captcha" i]',
+                            '#captcha-input',
+                            'input[type="text"]:not([name*="text" i])',
+                        ]
+                        
+                        captcha_input = None
+                        for sel in captcha_selectors:
+                            try:
+                                captcha_input = await page.wait_for_selector(sel, timeout=3000)
+                                if captcha_input:
+                                    print(f"Found CAPTCHA input with: {sel}")
+                                    break
+                            except:
+                                continue
+                        
                         if captcha_input:
                             await captcha_input.fill(captcha_code)
                             await asyncio.sleep(0.5)
                             captcha_solved = True
                             break
+                        else:
+                            print("Could not find CAPTCHA input field")
+                    else:
+                        print(f"CAPTCHA extraction failed (attempt {attempt + 1})")
                     
                     # If CAPTCHA extraction failed, try refreshing
                     if attempt < max_captcha_attempts - 1:
                         refreshed = await self._refresh_captcha(page)
                         if refreshed:
-                            await asyncio.sleep(2)  # Wait for new CAPTCHA
+                            await asyncio.sleep(3)  # Wait for new CAPTCHA
                             continue
                         else:
-                            # Try reloading the page
-                            await page.reload(wait_until='networkidle')
+                            print("Could not refresh CAPTCHA, trying again...")
                             await asyncio.sleep(2)
-                            # Re-enter text
-                            await text_area.fill(text)
-                            await asyncio.sleep(0.5)
                 
                 if not captcha_solved:
                     raise Exception("Could not solve CAPTCHA after multiple attempts")
