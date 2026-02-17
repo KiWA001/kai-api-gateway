@@ -616,6 +616,96 @@ curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
             </div>
         </div>
 
+        <!-- TTS (Text-to-Speech) -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>Text-to-Speech</h3>
+                    <p>Convert text to natural-sounding speech using SpeechMA. Supports 20+ voices.</p>
+                </div>
+                <span class="method-badge">POST /v1/text-to-speech</span>
+            </div>
+            <div class="endpoint-body">
+                <div class="endpoint-docs">
+                    <span class="demo-label">Parameters</span>
+                    <table class="param-table">
+                        <tr>
+                            <td><span class="param-name">text</span></td>
+                            <td><span class="param-desc">Text to convert (max 2000 chars)</span><span class="param-req">(required)</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name">voice_id</span></td>
+                            <td><span class="param-desc">Voice to use (ava, andrew, brian, etc.)</span><span class="param-req">(optional)</span></td>
+                        </tr>
+                    </table>
+                    <br>
+                    <div class="example-header">
+                        <span class="demo-label">Example Request</span>
+                        <button class="copy-btn" onclick="copyExample('ex-tts')">📋 Copy</button>
+                    </div>
+                    <div id="ex-tts" class="demo-response visible" style="color: #a78bfa;">
+curl -X POST https://kiwa001-kai-api-gateway.hf.space/v1/text-to-speech/ava \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"text": "Hello! This is a test of the text to speech API."}' \
+  --output speech.mp3
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
+                        <strong>Default Voice:</strong> Ava Multilingual (Female, US)<br>
+                        <strong>Available Voices:</strong> ava, andrew, brian, emma, remy, vivienne, daniel, serena, matthew, jane, and more.
+                    </p>
+                </div>
+                <div class="endpoint-demo">
+                    <span class="demo-label">Try It Live</span>
+                    <textarea id="tts-input" class="demo-input" rows="3" placeholder="Enter text to convert to speech...">Hello! Welcome to K-AI API text-to-speech. This is Ava speaking.</textarea>
+                    
+                    <select id="tts-voice" class="demo-select">
+                        <option value="ava" selected>Ava (Female, US) - Default</option>
+                        <option value="andrew">Andrew (Male, US)</option>
+                        <option value="brian">Brian (Male, US)</option>
+                        <option value="emma">Emma (Female, UK)</option>
+                        <option value="remy">Remy (Male, France)</option>
+                        <option value="vivienne">Vivienne (Female, US)</option>
+                        <option value="daniel">Daniel (Male, UK)</option>
+                        <option value="serena">Serena (Female, US)</option>
+                        <option value="matthew">Matthew (Male, US)</option>
+                        <option value="jane">Jane (Female, US)</option>
+                        <option value="alfonso">Alfonso (Male, Spain)</option>
+                        <option value="mario">Mario (Male, Italy)</option>
+                        <option value="klaus">Klaus (Male, Germany)</option>
+                        <option value="sakura">Sakura (Female, Japan)</option>
+                        <option value="xin">Xin (Female, China)</option>
+                        <option value="jose">Jose (Male, Brazil)</option>
+                        <option value="ines">Ines (Female, Portugal)</option>
+                        <option value="amira">Amira (Female, Saudi Arabia)</option>
+                        <option value="fatima">Fatima (Female, UAE)</option>
+                    </select>
+                    
+                    <button class="demo-btn" id="tts-generate-btn" onclick="generateTTS()">Generate Speech ▶</button>
+                    
+                    <div id="tts-status" class="demo-status"></div>
+                    
+                    <div id="tts-audio-container" style="display: none; margin-top: 16px; padding: 16px; background: var(--bg-primary); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                        <span class="demo-label" style="margin-bottom: 8px;">Generated Audio</span>
+                        <audio id="tts-audio-player" controls style="width: 100%; margin-top: 8px;">
+                            Your browser does not support the audio element.
+                        </audio>
+                        <div style="margin-top: 12px; display: flex; gap: 10px;">
+                            <a id="tts-download-link" href="#" download="speech.mp3" 
+                               style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; 
+                                      background: var(--success); color: white; text-decoration: none; 
+                                      border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;">
+                                ⬇ Download MP3
+                            </a>
+                            <span id="tts-file-info" style="color: var(--text-muted); font-size: 12px; align-self: center;"></span>
+                        </div>
+                    </div>
+                    
+                    <div id="tts-error" class="demo-response error" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Live Ranking Container -->
         <div class="endpoint-block">
             <div class="endpoint-header">
@@ -914,6 +1004,114 @@ curl -X POST https://kiwa001-kai-api-gateway.hf.space/deep_research \
                 resBox.innerText = JSON.stringify(data, null, 2);
             } catch (e) {
                 resBox.innerText = 'Error: ' + e.message;
+            }
+        }
+
+        // --- TTS (Text-to-Speech) Functionality ---
+        async function generateTTS() {
+            const text = document.getElementById('tts-input').value.trim();
+            const voiceId = document.getElementById('tts-voice').value;
+            const statusBox = document.getElementById('tts-status');
+            const audioContainer = document.getElementById('tts-audio-container');
+            const audioPlayer = document.getElementById('tts-audio-player');
+            const downloadLink = document.getElementById('tts-download-link');
+            const fileInfo = document.getElementById('tts-file-info');
+            const errorBox = document.getElementById('tts-error');
+            const generateBtn = document.getElementById('tts-generate-btn');
+
+            // Validation
+            if (!text) {
+                alert("Please enter some text to convert to speech");
+                return;
+            }
+
+            if (text.length > 2000) {
+                alert("Text is too long! Maximum 2000 characters allowed.");
+                return;
+            }
+
+            // Reset UI
+            audioContainer.style.display = 'none';
+            errorBox.style.display = 'none';
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating... ⏳';
+            
+            statusBox.style.display = 'block';
+            statusBox.innerHTML = 'Sending request to SpeechMA... <span style="opacity: 0.7;">(Solving CAPTCHA)</span>';
+            statusBox.style.color = 'var(--text-muted)';
+
+            const startTime = Date.now();
+
+            try {
+                const response = await fetch(`/v1/text-to-speech/${voiceId}`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model_id: 'eleven_multilingual_v2',
+                        voice_settings: {
+                            stability: 0.5,
+                            similarity_boost: 0.75
+                        }
+                    })
+                });
+
+                const duration = Date.now() - startTime;
+
+                if (!response.ok) {
+                    let errorMsg = 'Failed to generate speech';
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = errorData.detail || errorData.message || JSON.stringify(errorData);
+                    } catch (e) {
+                        errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+                    }
+                    throw new Error(errorMsg);
+                }
+
+                // Get audio blob
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+
+                // Update UI
+                statusBox.innerHTML = `✅ Success! (${duration}ms)`;
+                statusBox.style.color = 'var(--success)';
+
+                // Setup audio player
+                audioPlayer.src = audioUrl;
+                audioContainer.style.display = 'block';
+
+                // Setup download link
+                downloadLink.href = audioUrl;
+                downloadLink.download = `speech_${voiceId}_${Date.now()}.mp3`;
+                
+                // Show file size
+                const fileSizeKB = (audioBlob.size / 1024).toFixed(1);
+                fileInfo.textContent = `${fileSizeKB} KB`;
+
+                // Auto-play
+                audioPlayer.play().catch(e => {
+                    console.log('Auto-play prevented:', e);
+                });
+
+            } catch (err) {
+                console.error('TTS Error:', err);
+                statusBox.innerHTML = '❌ Failed';
+                statusBox.style.color = 'var(--error)';
+                
+                errorBox.style.display = 'block';
+                errorBox.innerHTML = `
+                    <div style="margin-bottom:5px; font-weight:bold;">Error Generating Speech</div>
+                    <div style="font-size: 12px; opacity: 0.9;">${err.message}</div>
+                    <div style="margin-top: 8px; font-size: 11px; opacity: 0.7;">
+                        Tip: This might be due to CAPTCHA issues. Try refreshing the page.
+                    </div>
+                `;
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Speech ▶';
             }
         }
 
