@@ -145,8 +145,8 @@ class KokoroTTSProvider:
         
         # Get voice info
         voice_info = self.get_voice_info(voice_id)
-        kokoro_voice = voice_info["kokoro_code"]
-        lang_code = voice_info["language"]
+        kokoro_voice = voice_info["code"]
+        lang_code = voice_info["lang"]
         
         logger.info(f"Kokoro TTS: voice={voice_info['voice_id']}, lang={lang_code}")
         
