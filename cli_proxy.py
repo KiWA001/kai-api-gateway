@@ -77,7 +77,7 @@ AUTH_PROVIDER_ALIASES = {
 }
 
 
-CLI_MODEL_ALIASES: dict[str, str] = {
+PUBLIC_CLI_MODEL_ALIASES: dict[str, str] = {
     # Anti-Gravity OAuth
     "anti-gravity-gemini-3.5-flash-low": "antigravity/gemini-3.5-flash-low",
     "anti-gravity-gemini-3.1-pro-low": "antigravity/gemini-3.1-pro-low",
@@ -85,18 +85,48 @@ CLI_MODEL_ALIASES: dict[str, str] = {
     "anti-gravity-gemini-3-pro-high": "antigravity/gemini-3-pro-high",
     "anti-gravity-claude-sonnet-4-6": "antigravity/claude-sonnet-4-6",
     # Codex / OpenAI OAuth
+    "codex-gpt-5.5": "codex/gpt-5.5",
+    "codex-gpt-5.4": "codex/gpt-5.4",
+    "codex-gpt-5.4-mini": "codex/gpt-5.4-mini",
+    "codex-gpt-5.2": "codex/gpt-5.2",
+    "codex-gpt-5.3-codex": "codex/gpt-5.3-codex",
+    # Gemini CLI OAuth
+    "gemini-3.5-flash": "gemini/gemini-3.5-flash",
+    "gemini-3.1-pro-preview": "gemini/gemini-3.1-pro-preview",
+    "gemini-3.1-flash-lite-preview": "gemini/gemini-3.1-flash-lite-preview",
+    "gemini-2.5-pro": "gemini/gemini-2.5-pro",
+    "gemini-2.5-flash": "gemini/gemini-2.5-flash",
+    "gemini-2.5-flash-lite": "gemini/gemini-2.5-flash-lite",
+    "gemini-3-pro-preview": "gemini/gemini-3-pro-preview",
+    "gemini-3-flash-preview": "gemini/gemini-3-flash-preview",
+    # Claude OAuth
+    "claude-opus-4-7": "claude/claude-opus-4-7",
+    "claude-sonnet-4-6": "claude/claude-sonnet-4-6",
+    "claude-sonnet-4-5": "claude/claude-sonnet-4-5",
+    "claude-opus-4-1": "claude/claude-opus-4-1-20250805",
+    "claude-3.7-sonnet": "claude/claude-3-7-sonnet-20250219",
+    # xAI OAuth
+    "xai-grok-build": "xai/grok-build-0.1",
+    "xai-grok-4.3": "xai/grok-4.3",
+    "xai-grok-3-mini": "xai/grok-3-mini",
+    # Kimi OAuth
+    "kimi-k2.6": "kimi/kimi-k2.6",
+    "kimi-k2": "kimi/kimi-k2",
+    "kimi-k2.5": "kimi/kimi-k2.5",
+    "kimi-k2-thinking": "kimi/kimi-k2-thinking",
+}
+
+LEGACY_CLI_MODEL_ALIASES: dict[str, str] = {
     "cliproxy-codex-gpt-5.5": "codex/gpt-5.5",
     "cliproxy-codex-gpt-5.4": "codex/gpt-5.4",
     "cliproxy-codex-gpt-5.4-mini": "codex/gpt-5.4-mini",
     "cliproxy-codex-gpt-5.2": "codex/gpt-5.2",
     "cliproxy-codex-gpt-5.3-codex": "codex/gpt-5.3-codex",
-    # Antigravity OAuth
     "cliproxy-antigravity-gemini-3.5-flash-low": "antigravity/gemini-3.5-flash-low",
     "cliproxy-antigravity-gemini-3.1-pro-low": "antigravity/gemini-3.1-pro-low",
     "cliproxy-antigravity-gemini-3-flash": "antigravity/gemini-3-flash",
     "cliproxy-antigravity-gemini-3-pro-high": "antigravity/gemini-3-pro-high",
     "cliproxy-antigravity-claude-sonnet-4-6": "antigravity/claude-sonnet-4-6",
-    # Gemini CLI OAuth
     "cliproxy-gemini-3.5-flash": "gemini/gemini-3.5-flash",
     "cliproxy-gemini-3.1-pro-preview": "gemini/gemini-3.1-pro-preview",
     "cliproxy-gemini-3.1-flash-lite-preview": "gemini/gemini-3.1-flash-lite-preview",
@@ -105,21 +135,23 @@ CLI_MODEL_ALIASES: dict[str, str] = {
     "cliproxy-gemini-2.5-flash-lite": "gemini/gemini-2.5-flash-lite",
     "cliproxy-gemini-3-pro-preview": "gemini/gemini-3-pro-preview",
     "cliproxy-gemini-3-flash-preview": "gemini/gemini-3-flash-preview",
-    # Claude OAuth
     "cliproxy-claude-opus-4-7": "claude/claude-opus-4-7",
     "cliproxy-claude-sonnet-4-6": "claude/claude-sonnet-4-6",
     "cliproxy-claude-sonnet-4-5": "claude/claude-sonnet-4-5",
     "cliproxy-claude-opus-4-1": "claude/claude-opus-4-1-20250805",
     "cliproxy-claude-3.7-sonnet": "claude/claude-3-7-sonnet-20250219",
-    # xAI OAuth
     "cliproxy-xai-grok-build": "xai/grok-build-0.1",
     "cliproxy-xai-grok-4.3": "xai/grok-4.3",
     "cliproxy-xai-grok-3-mini": "xai/grok-3-mini",
-    # Kimi OAuth
     "cliproxy-kimi-k2.6": "kimi/kimi-k2.6",
     "cliproxy-kimi-k2": "kimi/kimi-k2",
     "cliproxy-kimi-k2.5": "kimi/kimi-k2.5",
     "cliproxy-kimi-k2-thinking": "kimi/kimi-k2-thinking",
+}
+
+CLI_MODEL_ALIASES: dict[str, str] = {
+    **PUBLIC_CLI_MODEL_ALIASES,
+    **LEGACY_CLI_MODEL_ALIASES,
 }
 
 
@@ -213,11 +245,7 @@ def resolve_cli_model(model: str | None) -> str:
 
 
 def get_cli_provider_models() -> list[str]:
-    return [
-        alias
-        for alias in CLI_MODEL_ALIASES
-        if not alias.startswith("cliproxy-antigravity-")
-    ]
+    return list(PUBLIC_CLI_MODEL_ALIASES.keys())
 
 
 def load_static_model_catalog() -> dict[str, Any]:

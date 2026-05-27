@@ -1255,6 +1255,27 @@
             resBox.textContent = JSON.stringify(data, null, 2);
         }
 
+        async function readJsonResponse(response) {
+            const text = await response.text();
+            let data = null;
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch {
+                const cleanText = text.replace(/\s+/g, ' ').trim().slice(0, 180);
+                const message = response.status >= 500
+                    ? 'Server returned an HTML error page. The Space may be paused, sleeping, or serving a platform error.'
+                    : 'Server returned a non-JSON response.';
+                throw new Error(`${message}${cleanText ? ` (${cleanText})` : ''}`);
+            }
+            if (!response.ok) {
+                const errorMessage = typeof data.error === 'object' && data.error
+                    ? data.error.message
+                    : data.error;
+                throw new Error(data.detail || errorMessage || data.message || `Request failed (${response.status})`);
+            }
+            return data;
+        }
+
         async function startCliAuth() {
             const provider = document.getElementById('cli-auth-provider').value;
             cliAuthProvider = provider;
@@ -1270,8 +1291,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || 'Could not start login');
+                const data = await readJsonResponse(response);
 
                 session.state = data.state || '';
                 session.url = data.url || '';
@@ -1336,8 +1356,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ redirect_url: redirectUrl })
                 });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || 'Could not submit redirect URL');
+                const data = await readJsonResponse(response);
                 session.status = 'Submitted';
                 showCliAuthResponse(data);
                 renderCliAuthSessions();
@@ -1360,8 +1379,7 @@
 
             try {
                 const response = await fetch(`/cli/auth/${provider}/status?state=${encodeURIComponent(session.state)}`);
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || 'Could not check status');
+                const data = await readJsonResponse(response);
                 const authenticated = data.status === 'ok' || data.status === 'authenticated';
                 session.status = authenticated ? 'Authenticated' : `Status: ${data.status || 'pending'}`;
                 showCliAuthResponse(data);
@@ -1400,8 +1418,7 @@
 
             try {
                 const response = await fetch('/cli/auth/files');
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || 'Could not load saved OAuth sessions');
+                const data = await readJsonResponse(response);
                 const files = normalizeAuthFilesPayload(data);
 
                 if (!files.length) {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -9,8 +10,8 @@ from pydantic import BaseModel, Field
 from auth import verify_api_key
 from cli_proxy import (
     AUTH_PROVIDERS,
-    CLI_MODEL_ALIASES,
     CLI_PROXY_ENABLED,
+    PUBLIC_CLI_MODEL_ALIASES,
     canonical_auth_provider,
     cli_api_request,
     cli_management_request,
@@ -48,11 +49,29 @@ async def list_cli_auth_providers(_: dict = Depends(verify_api_key)):
 async def start_cli_auth(provider: str, _: dict = Depends(verify_api_key)):
     try:
         provider_id = canonical_auth_provider(provider)
+        if provider_id == "antigravity" and (
+            not os.getenv("ANTIGRAVITY_OAUTH_CLIENT_ID", "").strip()
+            or not os.getenv("ANTIGRAVITY_OAUTH_CLIENT_SECRET", "").strip()
+        ):
+            raise HTTPException(
+                status_code=500,
+                detail="Anti-Gravity OAuth is missing ANTIGRAVITY_OAUTH_CLIENT_ID or ANTIGRAVITY_OAUTH_CLIENT_SECRET on the server.",
+            )
+        if provider_id == "gemini" and (
+            not os.getenv("GEMINI_OAUTH_CLIENT_ID", "").strip()
+            or not os.getenv("GEMINI_OAUTH_CLIENT_SECRET", "").strip()
+        ):
+            raise HTTPException(
+                status_code=500,
+                detail="Gemini CLI OAuth is missing GEMINI_OAUTH_CLIENT_ID or GEMINI_OAUTH_CLIENT_SECRET on the server.",
+            )
         meta = AUTH_PROVIDERS[provider_id]
         payload = await cli_management_request(
             "GET",
             meta["management_endpoint"],
         )
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -138,8 +157,7 @@ async def list_cli_models(_: dict = Depends(verify_api_key)):
             "routes_to": target,
             "type": "alias",
         }
-        for alias, target in CLI_MODEL_ALIASES.items()
-        if not alias.startswith("cliproxy-antigravity-")
+        for alias, target in PUBLIC_CLI_MODEL_ALIASES.items()
     ]
 
     try:

@@ -433,7 +433,7 @@
                         curl https://kiwa001-kai-api-gateway.hf.space/v1/chat/completions \
                         -H "Content-Type: application/json" \
                         -H "Authorization: Bearer YOUR_API_KEY" \
-                        -d '{"model": "cliproxy-codex-gpt-5.5", "messages": [{"role": "user", "content": "Hello!"}]}'
+                        -d '{"model": "codex-gpt-5.5", "messages": [{"role": "user", "content": "Hello!"}]}'
                     </div>
                     <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
                         <strong>Note:</strong> Get your API key from the dashboard above. Dashboard requests don't require authentication.
@@ -446,9 +446,9 @@
 
                     <select id="chat-basic-model" class="demo-select" style="margin-top:10px;">
                         <option value="anti-gravity-gemini-3.5-flash-low">anti-gravity-gemini-3.5-flash-low (Default)</option>
-                        <option value="cliproxy-codex-gpt-5.5">cliproxy-codex-gpt-5.5</option>
-                        <option value="cliproxy-gemini-3.5-flash">cliproxy-gemini-3.5-flash</option>
-                        <option value="cliproxy-claude-opus-4-7">cliproxy-claude-opus-4-7</option>
+                        <option value="codex-gpt-5.5">codex-gpt-5.5</option>
+                        <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                        <option value="claude-opus-4-7">claude-opus-4-7</option>
                     </select>
 
                     <button class="demo-btn" onclick="runDemo('chat-basic')">Run Request ▶</button>

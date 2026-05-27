@@ -40,7 +40,7 @@ Supported providers are `codex`, `antigravity`, `gemini`, `claude`, `xai`, and `
 curl https://YOUR_HOST/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"model":"cliproxy-codex-gpt-5.5","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"codex-gpt-5.5","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 You can list sidecar models with:
