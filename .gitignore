@@ -10,3 +10,5 @@ zai_captured.json
 debug_screenshots/
 node_modules/
 .opencode/
+CLIProxyAPI-main/CLIProxyAPI
+CLIProxyAPI-main/assets/*.png

@@ -16,7 +16,6 @@ logger = logging.getLogger("kai_api.search")
 
 class SearchEngine:
     def __init__(self):
-        self.ddgs = DDGS()
         # Use a more realistic browser header set
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -31,11 +30,12 @@ class SearchEngine:
         Tries multiple backends (api, html, lite) for robustness.
         Returns: [{'title': str, 'href': str, 'body': str}, ...]
         """
+        ddgs = DDGS()
         backends = ["api", "html", "lite"]
         for backend in backends:
             try:
                 logger.info(f"Searching '{query}' using backend='{backend}'...")
-                results = list(self.ddgs.text(query, max_results=max_results, backend=backend))
+                results = list(ddgs.text(query, max_results=max_results, backend=backend))
                 if results:
                     logger.info(f"Found {len(results)} results via '{backend}'")
                     return results

@@ -8,7 +8,7 @@ Uses kaiapi_ prefixed table names for multi-project organization.
 import logging
 from typing import Dict, Optional
 from db import get_supabase
-from config import PROVIDERS
+from config import HIDE_BROWSER_PROVIDERS, PROVIDERS
 
 logger = logging.getLogger("kai_api.provider_state")
 
@@ -105,13 +105,18 @@ class ProviderStateManager:
     
     def get_all_providers(self) -> Dict[str, dict]:
         """Get all provider states."""
-        return self._providers.copy()
+        return {
+            k: v.copy()
+            for k, v in self._providers.items()
+            if not (HIDE_BROWSER_PROVIDERS and v.get("type") == "browser")
+        }
     
     def get_enabled_providers(self) -> Dict[str, dict]:
         """Get only enabled providers."""
         return {
             k: v for k, v in self._providers.items() 
             if v.get("enabled", False)
+            and not (HIDE_BROWSER_PROVIDERS and v.get("type") == "browser")
         }
     
     async def set_provider_state(self, provider_id: str, enabled: bool) -> bool:
@@ -159,6 +164,7 @@ class ProviderStateManager:
             provider_id 
             for provider_id, config in self._providers.items()
             if config.get("enabled", False)
+            and not (HIDE_BROWSER_PROVIDERS and config.get("type") == "browser")
         ]
 
 

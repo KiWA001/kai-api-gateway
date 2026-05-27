@@ -17,12 +17,8 @@ from supabase import create_client, Client
 from providers.base import BaseProvider
 from providers.g4f_provider import G4FProvider
 from providers.pollinations_provider import PollinationsProvider
-from providers.gemini_provider import GeminiProvider
-from providers.zai_provider import ZaiProvider
-from providers.huggingface_widget_provider import HuggingFaceWidgetProvider
-from providers.copilot_provider import CopilotProvider
 from providers.opencode_provider import OpenCodeProvider
-from config import MODEL_RANKING, PROVIDER_MODELS, SUPABASE_URL, SUPABASE_KEY
+from config import ENABLE_BROWSER_PROVIDERS, ENABLE_CLI_PROXY, MODEL_RANKING, PROVIDER_MODELS, SUPABASE_URL, SUPABASE_KEY
 from models import ModelInfo
 from sanitizer import sanitize_response
 
@@ -52,8 +48,21 @@ class AIEngine:
             "pollinations": PollinationsProvider(),
             "opencode": OpenCodeProvider(),
         }
-        # Z.ai requires Playwright + Chromium (not available on Vercel serverless)
-        if ZaiProvider.is_available():
+        if ENABLE_CLI_PROXY:
+            from providers.cli_proxy_provider import CLIProxyProvider
+
+            self._providers["cli"] = CLIProxyProvider()
+            logger.info("✅ CLI Proxy OAuth provider enabled")
+
+        # Browser-backed providers remain available behind an environment flag.
+        # They are disabled by default so Docker/API deploys do not launch Playwright.
+        if ENABLE_BROWSER_PROVIDERS:
+            from providers.copilot_provider import CopilotProvider
+            from providers.gemini_provider import GeminiProvider
+            from providers.huggingface_widget_provider import HuggingFaceWidgetProvider
+            from providers.zai_provider import ZaiProvider
+
+        if ENABLE_BROWSER_PROVIDERS and ZaiProvider.is_available():
             self._providers["zai"] = ZaiProvider()
             logger.info("✅ Z.ai provider enabled (Playwright available)")
             
@@ -69,7 +78,7 @@ class AIEngine:
             self._providers["copilot"] = CopilotProvider()
             logger.info("✅ Copilot provider enabled (with CAPTCHA support)")
         else:
-            logger.warning("⚠️ Z.ai/Gemini/HuggingFace Widget/Copilot providers disabled (Playwright not installed)")
+            logger.warning("⚠️ Browser providers disabled (set KAI_ENABLE_BROWSER_PROVIDERS=true to enable Playwright providers)")
         # Success Tracker: Key = "provider/model_id"
         # Value = {success, failure, consecutive_failures, avg_time_ms, total_time_ms, count_samples}
         self._stats: dict[str, dict] = {}

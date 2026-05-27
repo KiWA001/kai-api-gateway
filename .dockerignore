@@ -1,0 +1,13 @@
+.git
+.github
+.vercel
+venv
+__pycache__
+*.pyc
+*.log
+.DS_Store
+debug_screenshots
+node_modules
+.opencode
+KAI_API_DOCKER
+CLIProxyAPI-main/CLIProxyAPI

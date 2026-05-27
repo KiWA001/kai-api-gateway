@@ -1,39 +1,43 @@
-# Use the official image with Playwright browsers pre-installed
-# This saves time and ensures all system dependencies for Chromium are present
-FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
+FROM golang:1.26-bookworm AS cliproxy-builder
 
-# Set working directory
+WORKDIR /src
+COPY CLIProxyAPI-main/go.mod CLIProxyAPI-main/go.sum ./
+RUN go mod download
+COPY CLIProxyAPI-main/ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/CLIProxyAPI ./cmd/server
+
+FROM python:3.12-slim-bookworm
+
 WORKDIR /app
 
-# Improve output logging
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    HOME=/tmp/kai-home \
+    PORT=7860 \
+    KAI_ENABLE_BROWSER_PROVIDERS=false \
+    KAI_HIDE_BROWSER_PROVIDERS=true \
+    KAI_CLI_PROXY_ENABLED=true \
+    KAI_CLI_PROXY_URL=http://127.0.0.1:8317 \
+    KAI_CLI_PROXY_API_KEY=sk-kai-cli-proxy \
+    KAI_CLI_PROXY_MANAGEMENT_KEY=sk-kai-cli-management \
+    KAI_CLI_PROXY_CONFIG_PATH=/tmp/cliproxy/config.yaml \
+    KAI_CLI_PROXY_AUTH_DIR=/tmp/cliproxy/auths \
+    GEMINI_OAUTH_CLIENT_ID= \
+    GEMINI_OAUTH_CLIENT_SECRET= \
+    ANTIGRAVITY_OAUTH_CLIENT_ID= \
+    ANTIGRAVITY_OAUTH_CLIENT_SECRET=
 
-# Install dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# Explicitly install playwright (removed from requirements.txt for Vercel compatibility)
-RUN pip install --no-cache-dir playwright
 
-# Install Playwright browsers (specifically Chromium)
-# The base image has them, but we run this to ensure linking is correct
-RUN playwright install chromium
-
-# Copy application code
+COPY --from=cliproxy-builder /out/CLIProxyAPI /usr/local/bin/CLIProxyAPI
 COPY . .
 
-# Remove user creation for debugging permissions
-# RUN useradd -m -u 1001 user
-# RUN chown -R user:user /app
-# USER user
-# ENV HOME=/home/user
-# ENV PATH=$HOME/.local/bin:$PATH
+RUN chmod +x /app/start-container.sh
 
-# Run as root for now to fix 404 crash
-ENV HOME=/root
-ENV PATH=/root/.local/bin:$PATH
-
-# Expose the port (Hugging Face uses 7860 by default)
 EXPOSE 7860
 
-# Start the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["/app/start-container.sh"]

@@ -34,6 +34,7 @@ from config import (
     CORS_ORIGINS,
     CORS_METHODS,
     CORS_HEADERS,
+    ENABLE_BROWSER_PROVIDERS,
 )
 from models import (
     ChatRequest,
@@ -53,6 +54,7 @@ from models import (
 )
 from services import engine, search_engine
 from v1_router import router as v1_router
+from cli_proxy_router import router as cli_proxy_router
 from admin_router import router as admin_router
 from tts_router import router as tts_router
 
@@ -104,12 +106,24 @@ app.add_middleware(
     allow_headers=CORS_HEADERS,
 )
 
+
+@app.middleware("http")
+async def block_disabled_browser_portal(request: Request, call_next):
+    """Keep Playwright portal routes dormant unless browser providers are enabled."""
+    if request.url.path.startswith("/qaz/portal") and not ENABLE_BROWSER_PROVIDERS:
+        return JSONResponse(
+            {"detail": "Browser portal is disabled. Set KAI_ENABLE_BROWSER_PROVIDERS=true to enable it."},
+            status_code=404,
+        )
+    return await call_next(request)
+
 # AI Engine (initialized via services.py)
 # engine = AIEngine() -> Moved to services.py
 # search_engine = SearchEngine() -> Moved to services.py
 
 # Include OpenAI Router
 app.include_router(v1_router)
+app.include_router(cli_proxy_router)
 app.include_router(admin_router)
 app.include_router(tts_router)
 

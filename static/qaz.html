@@ -774,7 +774,7 @@
         </div>
 
         <!-- Browser Portal Section -->
-        <div class="card" style="padding:0;overflow:hidden;">
+        <div class="card" id="browser-portal-card" style="display:none;padding:0;overflow:hidden;">
             <div style="padding:16px;border-bottom:1px solid var(--border);">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                     <div>
@@ -989,7 +989,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadKeys();
             loadProviders();
-            checkBrowserStatus();
         });
 
         // API Keys Functions
@@ -1631,6 +1630,14 @@
 
                 const data = await res.json();
                 console.log('Providers loaded:', data);
+                const browserPortalCard = document.getElementById('browser-portal-card');
+                const hasBrowserProviders = (data.providers || []).some(p => p.type === 'browser');
+                if (browserPortalCard) {
+                    browserPortalCard.style.display = hasBrowserProviders ? 'block' : 'none';
+                }
+                if (hasBrowserProviders) {
+                    checkBrowserStatus();
+                }
 
                 if (!data.providers || data.providers.length === 0) {
                     container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">No providers configured. Please initialize the database.</div>';

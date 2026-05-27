@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Union, Dict, Any
 import time
@@ -8,6 +9,7 @@ from auth import verify_api_key
 from db import get_supabase
 from services import engine
 from utils import calculate_usage
+from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, resolve_cli_model
 from error_handling import (
     openai_error,
     error_invalid_api_key,
@@ -97,6 +99,48 @@ async def chat_completions(
     """
     OpenAI-compatible Chat Completion Endpoint.
     """
+    provider = request.provider or "auto"
+    use_cli_proxy = (
+        provider in {"cli", "cliproxy"}
+        or request.model in CLI_MODEL_ALIASES
+        or (request.model or "").startswith(("codex/", "claude/", "gemini/", "antigravity/", "xai/", "kimi/"))
+    )
+
+    if use_cli_proxy:
+        try:
+            payload = request.model_dump()
+            payload["model"] = resolve_cli_model(request.model)
+            payload.pop("provider", None)
+            response = await cli_api_request(
+                "POST",
+                "v1/chat/completions",
+                json_body=payload,
+                headers={"content-type": "application/json"},
+            )
+            try:
+                data = response.json()
+            except Exception:
+                return openai_error(
+                    response.text or "CLI proxy returned a non-JSON response",
+                    "upstream_error",
+                    response.status_code,
+                )
+
+            if response.status_code >= 400:
+                return JSONResponse(data, status_code=response.status_code)
+
+            response_text = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            usage = data.get("usage") or calculate_usage([m.model_dump() for m in request.messages], response_text)
+            if not key_data.get("is_dashboard", False):
+                background_tasks.add_task(update_usage_stats, key_data["id"], usage.get("total_tokens", 0))
+            return JSONResponse(data)
+        except Exception as e:
+            return error_server(f"CLI proxy request failed: {e}")
+
     # Convert messages list to simple prompt (or keep as list if engine supports it)
     # Our engine currently takes a single prompt string + optional system prompt.
     
@@ -116,8 +160,6 @@ async def chat_completions(
             user_prompt += f"\n\n[Assistant]: {m.content}"
             
     # Call Engine
-    provider = request.provider or "auto"
-    
     try:
         if not engine:
             raise HTTPException(status_code=503, detail="AI Engine is not initialized (Startup Error)")

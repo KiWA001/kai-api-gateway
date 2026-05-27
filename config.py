@@ -6,6 +6,8 @@ If a model fails on one provider, tries the next model.
 Exhaustively tries ALL combinations before giving up.
 """
 
+import os
+
 # -------------------------------------------------------------------
 # MODEL RANKING — Best to worst. Engine walks top-to-bottom.
 # Each entry: (friendly_name, provider, provider_model_id)
@@ -14,6 +16,24 @@ Exhaustively tries ALL combinations before giving up.
 # Examples: huggingchat-llama-3.3-70b, zai-glm-5, g4f-gpt-4, gemini-gemini-3-flash
 # -------------------------------------------------------------------
 MODEL_RANKING = [
+    # Tier 0 — OAuth-backed CLIProxyAPI sidecar models (Docker only by default)
+    ("cliproxy-codex-gpt-5.5", "cli", "cliproxy-codex-gpt-5.5"),
+    ("cliproxy-codex-gpt-5.4", "cli", "cliproxy-codex-gpt-5.4"),
+    ("cliproxy-codex-gpt-5.4-mini", "cli", "cliproxy-codex-gpt-5.4-mini"),
+    ("cliproxy-gemini-3.5-flash", "cli", "cliproxy-gemini-3.5-flash"),
+    ("cliproxy-gemini-3.1-pro-preview", "cli", "cliproxy-gemini-3.1-pro-preview"),
+    ("cliproxy-claude-opus-4-7", "cli", "cliproxy-claude-opus-4-7"),
+    ("cliproxy-claude-sonnet-4-6", "cli", "cliproxy-claude-sonnet-4-6"),
+    ("cliproxy-xai-grok-build", "cli", "cliproxy-xai-grok-build"),
+    ("cliproxy-kimi-k2.6", "cli", "cliproxy-kimi-k2.6"),
+    ("cliproxy-codex-gpt-5.2", "cli", "cliproxy-codex-gpt-5.2"),
+    ("cliproxy-codex-gpt-5.3-codex", "cli", "cliproxy-codex-gpt-5.3-codex"),
+    ("cliproxy-gemini-2.5-pro", "cli", "cliproxy-gemini-2.5-pro"),
+    ("cliproxy-gemini-2.5-flash", "cli", "cliproxy-gemini-2.5-flash"),
+    ("cliproxy-claude-sonnet-4-5", "cli", "cliproxy-claude-sonnet-4-5"),
+    ("cliproxy-xai-grok-4.3", "cli", "cliproxy-xai-grok-4.3"),
+    ("cliproxy-kimi-k2.5", "cli", "cliproxy-kimi-k2.5"),
+
     # Tier 1 — Top Hugging Face Models (Best Quality via Widget)
     ("hf-kimi-k2.5", "huggingface_widget", "hf-kimi-k2.5"),
     ("hf-minimax-m2.5", "huggingface_widget", "hf-minimax-m2.5"),
@@ -80,17 +100,39 @@ POLLINATIONS_MODEL_NAMES = {
     "midijourney": "midijourney",
 }
 
+# Browser-backed providers stay in the codebase, but are off by default for Docker/API deploys.
+# Set KAI_ENABLE_BROWSER_PROVIDERS=true to make Playwright providers visible again.
+ENABLE_BROWSER_PROVIDERS = os.getenv("KAI_ENABLE_BROWSER_PROVIDERS", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+HIDE_BROWSER_PROVIDERS = os.getenv("KAI_HIDE_BROWSER_PROVIDERS", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+ENABLE_CLI_PROXY = os.getenv("KAI_CLI_PROXY_ENABLED", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 # Provider Configuration - Enable/Disable providers
 # These can be toggled via admin panel
 PROVIDERS = {
     "g4f": {"enabled": True, "name": "G4F (Free GPT-4)", "type": "api"},
-    "zai": {"enabled": True, "name": "Z.ai (GLM-5)", "type": "api"},
-    "gemini": {"enabled": True, "name": "Google Gemini", "type": "api"},
+    "zai": {"enabled": ENABLE_BROWSER_PROVIDERS, "name": "Z.ai (GLM-5)", "type": "browser"},
+    "gemini": {"enabled": ENABLE_BROWSER_PROVIDERS, "name": "Google Gemini Browser", "type": "browser"},
     "pollinations": {"enabled": True, "name": "Pollinations", "type": "api"},
-    "huggingface_widget": {"enabled": True, "name": "Hugging Face Widget", "type": "browser"},
+    "huggingface_widget": {"enabled": ENABLE_BROWSER_PROVIDERS, "name": "Hugging Face Widget", "type": "browser"},
     "copilot": {"enabled": False, "name": "Microsoft Copilot", "type": "browser"},
     "chatgpt": {"enabled": False, "name": "ChatGPT", "type": "browser"},
     "opencode": {"enabled": False, "name": "OpenCode Terminal", "type": "terminal"},
+    "cli": {"enabled": ENABLE_CLI_PROXY, "name": "CLI Proxy OAuth", "type": "cli"},
 }
 
 # API Keys
@@ -136,5 +178,37 @@ PROVIDER_MODELS = {
         "opencode-minimax-m2.5-free",
         "opencode-big-pickle",
         "opencode-glm-4.7",
+    ],
+    "cli": [
+        "cliproxy-codex-gpt-5.5",
+        "cliproxy-codex-gpt-5.4",
+        "cliproxy-codex-gpt-5.4-mini",
+        "cliproxy-codex-gpt-5.2",
+        "cliproxy-codex-gpt-5.3-codex",
+        "cliproxy-antigravity-gemini-3.5-flash-low",
+        "cliproxy-antigravity-gemini-3.1-pro-low",
+        "cliproxy-antigravity-gemini-3-flash",
+        "cliproxy-antigravity-gemini-3-pro-high",
+        "cliproxy-antigravity-claude-sonnet-4-6",
+        "cliproxy-gemini-3.5-flash",
+        "cliproxy-gemini-3.1-pro-preview",
+        "cliproxy-gemini-3.1-flash-lite-preview",
+        "cliproxy-gemini-2.5-pro",
+        "cliproxy-gemini-2.5-flash",
+        "cliproxy-gemini-2.5-flash-lite",
+        "cliproxy-gemini-3-pro-preview",
+        "cliproxy-gemini-3-flash-preview",
+        "cliproxy-claude-opus-4-7",
+        "cliproxy-claude-sonnet-4-6",
+        "cliproxy-claude-sonnet-4-5",
+        "cliproxy-claude-opus-4-1",
+        "cliproxy-claude-3.7-sonnet",
+        "cliproxy-xai-grok-build",
+        "cliproxy-xai-grok-4.3",
+        "cliproxy-xai-grok-3-mini",
+        "cliproxy-kimi-k2.6",
+        "cliproxy-kimi-k2",
+        "cliproxy-kimi-k2.5",
+        "cliproxy-kimi-k2-thinking",
     ],
 }

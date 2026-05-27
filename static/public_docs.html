@@ -402,7 +402,7 @@
         <div class="container">
             <h1>K-AI API</h1>
             <p class="motto">Feel free to AI</p>
-            <p class="desc">The completely free AI proxy. No signup. No keys. Just code.</p>
+            <p class="desc">OAuth-backed CLI models and free fallbacks behind one simple API call.</p>
         </div>
     </div>
 
@@ -433,7 +433,7 @@
                         curl https://kiwa001-kai-api-gateway.hf.space/v1/chat/completions \
                         -H "Content-Type: application/json" \
                         -H "Authorization: Bearer YOUR_API_KEY" \
-                        -d '{"model": "gemini-3-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
+                        -d '{"model": "cliproxy-codex-gpt-5.5", "messages": [{"role": "user", "content": "Hello!"}]}'
                     </div>
                     <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
                         <strong>Note:</strong> Get your API key from the dashboard above. Dashboard requests don't require authentication.
@@ -445,23 +445,14 @@
                         placeholder='{"message": "What is AI?"}'>What is the capital of France?</textarea>
 
                     <select id="chat-basic-model" class="demo-select" style="margin-top:10px;">
-                        <option value="gemini-3-flash">gemini-3-flash (Default)</option>
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                        <option value="glm-4">glm-4</option>
-                        <option value="mistral-large">mistral-large</option>
+                        <option value="cliproxy-codex-gpt-5.5">cliproxy-codex-gpt-5.5 (Default)</option>
+                        <option value="cliproxy-gemini-3.5-flash">cliproxy-gemini-3.5-flash</option>
+                        <option value="cliproxy-claude-opus-4-7">cliproxy-claude-opus-4-7</option>
+                        <option value="pollinations-gpt-oss-20b">pollinations-gpt-oss-20b</option>
                     </select>
 
                     <button class="demo-btn" onclick="runDemo('chat-basic')">Run Request ▶</button>
                     <div id="chat-basic-status" class="demo-status"></div>
-
-                    <select id="chat-basic-model" class="demo-select" style="margin-top:10px;">
-                        <option value="gemini-3-flash">gemini-3-flash (Default)</option>
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                        <option value="glm-4">glm-4</option>
-                        <option value="mistral-large">mistral-large</option>
-                    </select>
 
                     <div id="chat-basic-res" class="demo-response"></div>
                 </div>
@@ -491,6 +482,60 @@
                     <span class="demo-label">Try It Live</span>
                     <button class="demo-btn" onclick="runDemo('models')">Fetch Models ▶</button>
                     <div id="models-res" class="demo-response"></div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- CLI OAuth -->
+        <div class="endpoint-block">
+            <div class="endpoint-header">
+                <div class="endpoint-title">
+                    <h3>CLI OAuth Login</h3>
+                    <p>Copy the provider login URL, authenticate in your browser, then paste the final redirect URL.</p>
+                </div>
+                <span class="method-badge">POST /cli/auth/{provider}/start</span>
+            </div>
+            <div class="endpoint-body">
+                <div class="endpoint-docs">
+                    <p style="color:var(--text-secondary); font-size:14px;">
+                        Browser-based Playwright providers are disabled in Docker. Use <code>codex</code>,
+                        <code>antigravity</code>, <code>gemini</code>, <code>claude</code>, <code>xai</code>,
+                        or <code>kimi</code> instead.
+                    </p>
+                    <br>
+                    <span class="demo-label">Example Flow</span>
+                    <div class="demo-response visible" style="color: #a78bfa;">
+                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/cli/auth/codex/start \
+                        -H "Authorization: Bearer YOUR_API_KEY"
+
+                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/cli/auth/codex/callback \
+                        -H "Content-Type: application/json" \
+                        -H "Authorization: Bearer YOUR_API_KEY" \
+                        -d '{"redirect_url":"PASTE_FINAL_BROWSER_REDIRECT_URL_HERE"}'
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
+                        Use <code>GET /cli/models</code> for sidecar model aliases and <code>/cli/v1/chat/completions</code>
+                        for direct sidecar proxying.
+                    </p>
+                </div>
+                <div class="endpoint-demo">
+                    <span class="demo-label">Authorize A CLI Provider</span>
+                    <select id="cli-auth-provider" class="demo-select">
+                        <option value="codex">Codex / OpenAI</option>
+                        <option value="antigravity">Antigravity</option>
+                        <option value="gemini">Gemini CLI</option>
+                        <option value="claude">Claude Code</option>
+                        <option value="xai">xAI / Grok</option>
+                        <option value="kimi">Kimi</option>
+                    </select>
+                    <button class="demo-btn" onclick="startCliAuth()">Start Login & Copy URL</button>
+                    <textarea id="cli-auth-url" class="demo-input" rows="3" readonly placeholder="The login URL will appear here."></textarea>
+                    <textarea id="cli-redirect-url" class="demo-input" rows="3" placeholder="Paste the final redirect URL here after browser login."></textarea>
+                    <button class="demo-btn" onclick="submitCliRedirect()">Submit Redirect URL</button>
+                    <button class="demo-btn" onclick="checkCliAuthStatus()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);">Check Status</button>
+                    <div id="cli-auth-status" class="demo-status"></div>
+                    <div id="cli-auth-res" class="demo-response"></div>
                 </div>
             </div>
         </div>
@@ -554,6 +599,9 @@
     <script>
         // Global flag for Pie Chart
         window.pieChartRendered = false;
+        const DEFAULT_CHAT_MODEL = 'cliproxy-codex-gpt-5.5';
+        let cliAuthProvider = 'codex';
+        let cliAuthState = '';
 
         async function runDemo(type) {
             const resBox = document.getElementById(type + '-res');
@@ -581,7 +629,7 @@
                 if (type === 'chat-basic') {
                     // Simple Chat
                     const inputVal = document.getElementById('chat-basic-input').value;
-                    const modelVal = document.getElementById('chat-basic-model').value || "gemini-3-flash";
+                    const modelVal = document.getElementById('chat-basic-model').value || DEFAULT_CHAT_MODEL;
 
                     if (!inputVal) { alert("Please enter a message"); return; }
 
@@ -593,7 +641,7 @@
                 }
                 else if (type === 'chat-adv') {
                     // Advanced Chat
-                    const model = document.getElementById('chat-adv-model').value || "gemini-3-flash";
+                    const model = document.getElementById('chat-adv-model').value || DEFAULT_CHAT_MODEL;
                     const userMsg = document.getElementById('chat-adv-msg').value;
 
                     if (!userMsg) { alert("Please enter a message"); return; }
@@ -643,6 +691,95 @@
                     </div>
                     <pre>${err.message}</pre>
                 `;
+            }
+        }
+
+        function setCliAuthStatus(message, isError = false) {
+            const statusBox = document.getElementById('cli-auth-status');
+            if (!statusBox) return;
+            statusBox.style.display = 'block';
+            statusBox.textContent = message;
+            statusBox.style.color = isError ? 'var(--error)' : 'var(--success)';
+        }
+
+        async function startCliAuth() {
+            const provider = document.getElementById('cli-auth-provider').value;
+            const resBox = document.getElementById('cli-auth-res');
+            const urlBox = document.getElementById('cli-auth-url');
+            resBox.className = 'demo-response visible';
+            resBox.style.display = 'none';
+            setCliAuthStatus('Starting login...');
+
+            try {
+                const response = await fetch(`/cli/auth/${provider}/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not start CLI login');
+
+                cliAuthProvider = data.provider || provider;
+                cliAuthState = data.state || '';
+                urlBox.value = data.url || '';
+
+                try {
+                    await navigator.clipboard.writeText(data.url || '');
+                    setCliAuthStatus('Login URL copied. Open it in your browser, finish login, then paste the redirect URL below.');
+                } catch {
+                    setCliAuthStatus('Login URL is ready. Copy it from the text box, open it in your browser, then paste the redirect URL below.');
+                }
+
+                resBox.style.display = 'block';
+                resBox.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (err) {
+                setCliAuthStatus(err.message, true);
+            }
+        }
+
+        async function submitCliRedirect() {
+            const provider = cliAuthProvider || document.getElementById('cli-auth-provider').value;
+            const redirectUrl = document.getElementById('cli-redirect-url').value.trim();
+            const resBox = document.getElementById('cli-auth-res');
+            if (!redirectUrl) {
+                setCliAuthStatus('Paste the redirect URL first.', true);
+                return;
+            }
+
+            setCliAuthStatus('Submitting redirect URL...');
+            try {
+                const response = await fetch(`/cli/auth/${provider}/callback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ redirect_url: redirectUrl })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not submit redirect URL');
+                setCliAuthStatus('Redirect submitted. Checking auth status...');
+                resBox.style.display = 'block';
+                resBox.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                if (cliAuthState) setTimeout(checkCliAuthStatus, 1200);
+            } catch (err) {
+                setCliAuthStatus(err.message, true);
+            }
+        }
+
+        async function checkCliAuthStatus() {
+            const provider = cliAuthProvider || document.getElementById('cli-auth-provider').value;
+            const resBox = document.getElementById('cli-auth-res');
+            if (!cliAuthState) {
+                setCliAuthStatus('Start a login first so there is a state to check.', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/cli/auth/${provider}/status?state=${encodeURIComponent(cliAuthState)}`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not check status');
+                setCliAuthStatus(data.status === 'ok' || data.status === 'authenticated' ? 'Authenticated.' : `Status: ${data.status || 'pending'}`);
+                resBox.style.display = 'block';
+                resBox.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (err) {
+                setCliAuthStatus(err.message, true);
             }
         }
 

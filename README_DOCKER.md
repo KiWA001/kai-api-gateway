@@ -1,48 +1,78 @@
-# Deploying KAI-API with Z.ai Online (Docker)
+# Deploying KAI API With CLI OAuth (Docker)
 
-To run **Z.ai** (which requires a full browser) online, you must use a Docker container.
-The best free option is **Hugging Face Spaces**.
+The Docker image now runs two local services:
 
-## Option A: Hugging Face Spaces (Recommended - Free)
+- KAI API on port `7860`
+- CLIProxyAPI sidecar on `127.0.0.1:8317`
 
-1.  **Create a Space**:
-    -   Go to [Hugging Face Spaces](https://huggingface.co/spaces).
-    -   Click **Create new Space**.
-    -   **Name**: `kai-api-gateway`.
-    -   **SDK**: Select **Docker**.
-    -   **Space Hardware**: `CPU basic (free)` (2 vCPU, 16GB RAM) is sufficient.
-    -   **Visibility**: `Public` or `Private`.
+Playwright/browser providers are disabled by default. Their code remains in the repo, but they are hidden from the UI and skipped at startup unless you explicitly re-enable them.
 
-2.  **Upload Files**:
-    -   You can drag and drop your project files, or use Git.
-    -   **Essential files**: `Dockerfile`, `requirements.txt`, `main.py`, `config.py`, `engine.py`, `providers/`, `static/`.
-    
-    *Git Command:*
-    ```bash
-    git remote add space https://huggingface.co/spaces/YOUR_USERNAME/kai-api-gateway
-    git push space main
-    ```
+## Hugging Face Spaces
 
-3.  **Wait for Build**:
-    -   Hugging Face will build the Docker image (takes ~2-3 mins).
-    -   Once "Running", your API is live!
-    -   **URL**: `https://YOUR_USERNAME-kai-api-gateway.hf.space`
+1. Create or open the `kai-api-gateway` Space.
+2. Set the Space SDK to `Docker`.
+3. Push this repository to the Space or let the GitHub sync workflow deploy it.
+4. Open `https://YOUR_USERNAME-kai-api-gateway.hf.space`.
 
-4.  **Access Your App**:
-    -   **Dashboard (UI)**: `https://YOUR_USERNAME-kai-api-gateway.hf.space/`
-    -   **API Docs (Swagger)**: `https://YOUR_USERNAME-kai-api-gateway.hf.space/docs`
-    -   **Admin Panel**: `https://YOUR_USERNAME-kai-api-gateway.hf.space/qazmlp`
+## CLI OAuth Flow
 
-5.  **Test Z.ai**:
-    -   Go to your Dashboard URL.
-    -   `/models` should listed `glm-5`.
-    -   Chat with `provider: zai` — it will work!
+Use the landing page or API endpoints:
 
-## Option B: Render / Railway / Koyeb
+```bash
+curl -X POST https://YOUR_HOST/cli/auth/codex/start \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
 
-1.  Connect your GitHub repo.
-2.  Select **Docker** as the deployment type.
-3.  Set the internal port to `7860` (or update CMD in Dockerfile to 8080).
-4.  Deploy.
+The response contains a login URL. Open it in your browser, finish login, copy the final redirect URL, then submit it:
 
-> **Note on Vercel**: Vercel Serverless Function does NOT support the browser. You can keep your Vercel deployment for lightweight tasks, but use this Docker instance for heavy AI tasks (Z.ai).
+```bash
+curl -X POST https://YOUR_HOST/cli/auth/codex/callback \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"redirect_url":"PASTE_FINAL_BROWSER_REDIRECT_URL_HERE"}'
+```
+
+Supported providers are `codex`, `antigravity`, `gemini`, `claude`, `xai`, and `kimi`.
+
+## Chat Examples
+
+```bash
+curl https://YOUR_HOST/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"model":"cliproxy-codex-gpt-5.5","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+You can list sidecar models with:
+
+```bash
+curl https://YOUR_HOST/cli/models \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Environment Flags
+
+`KAI_CLI_PROXY_ENABLED=true` enables the sidecar integration.
+
+`KAI_CLI_PROXY_API_KEY` is the internal key KAI uses to call the sidecar.
+
+`KAI_CLI_PROXY_MANAGEMENT_KEY` protects OAuth and management routes.
+
+`KAI_ENABLE_BROWSER_PROVIDERS=false` keeps Playwright providers off.
+
+`KAI_HIDE_BROWSER_PROVIDERS=true` keeps browser providers out of the admin UI.
+
+`GEMINI_OAUTH_CLIENT_ID` and `GEMINI_OAUTH_CLIENT_SECRET` are required for Gemini CLI OAuth.
+
+`ANTIGRAVITY_OAUTH_CLIENT_ID` and `ANTIGRAVITY_OAUTH_CLIENT_SECRET` are required for Antigravity OAuth.
+
+To bring Playwright providers back later, install Playwright browser dependencies in the image and set:
+
+```bash
+KAI_ENABLE_BROWSER_PROVIDERS=true
+KAI_HIDE_BROWSER_PROVIDERS=false
+```
+
+## Vercel Note
+
+The sidecar needs a long-running Docker process, so the full CLI OAuth setup belongs on Docker hosts such as Hugging Face Spaces, Render, Railway, Koyeb, or EC2. Vercel can still serve the lightweight Python app, but it will not run the Go sidecar.
