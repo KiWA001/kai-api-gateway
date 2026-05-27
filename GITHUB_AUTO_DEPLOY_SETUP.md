@@ -1,5 +1,34 @@
 # GitHub Auto-Deployment Setup Guide
 
+## Hugging Face Spaces Redeploy
+
+The GitHub workflow `.github/workflows/sync_to_hf.yml` can create a fresh Docker Space and keep it updated automatically.
+
+Default fresh Space target:
+
+```text
+KiWA001/kai-api-gateway-live
+```
+
+To use a different Space name:
+
+1. Open `https://github.com/KiWA001/kai-api-gateway/settings/variables/actions`
+2. Add or update repository variable `HF_SPACE_ID`
+3. Set it to `KiWA001/your-new-space-name`
+4. Keep repository secret `HF_TOKEN` set with a Hugging Face write token
+5. Open GitHub Actions and run `Sync to Hugging Face Spaces`
+
+The workflow creates the Space if it does not exist, pushes a clean single-commit deploy snapshot, and then keeps deploying on every push to `main`.
+
+After the new Space is working, the old paused Space can be deleted from Hugging Face:
+
+1. Open the old Space
+2. Go to `Settings`
+3. Use `Delete this Space`
+4. Type the requested confirmation exactly
+
+You can also keep the old Space paused while the new one is live.
+
 ## Overview
 Your code is now on GitHub and ready for auto-deployment to AWS EC2!
 

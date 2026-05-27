@@ -15,8 +15,58 @@ jobs:
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID || 'KiWA001/kai-api-gateway-live' }}
+          HF_SPACE_PRIVATE: ${{ vars.HF_SPACE_PRIVATE || 'false' }}
         run: |
           set -euo pipefail
+
+          if ! printf '%s' "$HF_SPACE_ID" | grep -Eq '^[^/]+/[^/]+$'; then
+            echo "HF_SPACE_ID must look like owner/space-name. Got: $HF_SPACE_ID"
+            exit 1
+          fi
+
+          SPACE_OWNER="${HF_SPACE_ID%%/*}"
+          SPACE_NAME="${HF_SPACE_ID#*/}"
+          export SPACE_OWNER SPACE_NAME
+
+          HF_USER="$(
+            curl -sS -H "Authorization: Bearer $HF_TOKEN" https://huggingface.co/api/whoami-v2 \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin).get("name", ""))'
+          )"
+          export HF_USER
+
+          python3 - <<'PY' > /tmp/hf_create_payload.json
+          import json
+          import os
+
+          owner = os.environ["SPACE_OWNER"]
+          name = os.environ["SPACE_NAME"]
+          hf_user = os.environ.get("HF_USER", "")
+          private = os.environ.get("HF_SPACE_PRIVATE", "false").lower() in {"1", "true", "yes", "on"}
+
+          payload = {
+              "type": "space",
+              "name": name,
+              "private": private,
+              "sdk": "docker",
+          }
+          if owner and owner != hf_user:
+              payload["organization"] = owner
+          print(json.dumps(payload))
+          PY
+
+          create_status="$(
+            curl -sS -o /tmp/hf_create_response.json -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer $HF_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data @/tmp/hf_create_payload.json \
+              https://huggingface.co/api/repos/create || true
+          )"
+          if [ "$create_status" != "200" ] && [ "$create_status" != "201" ] && [ "$create_status" != "409" ]; then
+            cat /tmp/hf_create_response.json
+            exit 1
+          fi
 
           git config --global user.email "bot@kai-api.com"
           git config --global user.name "KAI Bot"
@@ -34,5 +84,5 @@ jobs:
           git config user.name "KAI Bot"
           git add .
           git commit -m "Deploy ${GITHUB_SHA} to Hugging Face"
-          git remote add space https://KiWA001:$HF_TOKEN@huggingface.co/spaces/KiWA001/kai-api-gateway
+          git remote add space "https://${SPACE_OWNER}:$HF_TOKEN@huggingface.co/spaces/${HF_SPACE_ID}"
           git push -f space main
