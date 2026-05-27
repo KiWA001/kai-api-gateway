@@ -1,3 +1,11 @@
+FROM golang:1.26-bookworm AS cliproxy-builder
+
+WORKDIR /src
+COPY CLIProxyAPI-main/go.mod CLIProxyAPI-main/go.sum ./
+RUN go mod download
+COPY CLIProxyAPI-main/ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -trimpath -ldflags="-s -w" -o /out/CLIProxyAPI ./cmd/server
+
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
@@ -25,7 +33,7 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY CLIProxyAPI-linux-amd64 /usr/local/bin/CLIProxyAPI
+COPY --from=cliproxy-builder /out/CLIProxyAPI /usr/local/bin/CLIProxyAPI
 COPY . .
 
 RUN chmod +x /app/start-container.sh /usr/local/bin/CLIProxyAPI

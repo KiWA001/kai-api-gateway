@@ -12,14 +12,6 @@ jobs:
         with:
           fetch-depth: 1
           lfs: false
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: CLIProxyAPI-main/go.mod
-          cache-dependency-path: CLIProxyAPI-main/go.sum
-      - name: Build CLI proxy sidecar
-        run: |
-          cd CLIProxyAPI-main
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ../CLIProxyAPI-linux-amd64 ./cmd/server
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -81,7 +73,6 @@ jobs:
 
           DEPLOY_DIR="$(mktemp -d)"
           git archive --format=tar HEAD | tar -x -C "$DEPLOY_DIR"
-          cp CLIProxyAPI-linux-amd64 "$DEPLOY_DIR/CLIProxyAPI-linux-amd64"
 
           cd "$DEPLOY_DIR"
           rm -rf .agent .github .vercel
