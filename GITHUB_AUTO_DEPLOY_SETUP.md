@@ -18,7 +18,7 @@ To use a different Space name:
 4. Keep repository secret `HF_TOKEN` set with a Hugging Face write token
 5. Open GitHub Actions and run `Sync to Hugging Face Spaces`
 
-The workflow creates the Space if it does not exist, pushes a clean single-commit deploy snapshot, and then keeps deploying on every push to `main`.
+The workflow creates the Space if it does not exist, builds the CLI proxy Linux sidecar in GitHub Actions, pushes a clean single-commit deploy snapshot, and then keeps deploying on every push to `main`.
 
 After the new Space is working, the old paused Space can be deleted from Hugging Face:
 

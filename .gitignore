@@ -11,4 +11,5 @@ debug_screenshots/
 node_modules/
 .opencode/
 CLIProxyAPI-main/CLIProxyAPI
+CLIProxyAPI-linux-amd64
 CLIProxyAPI-main/assets/*.png
