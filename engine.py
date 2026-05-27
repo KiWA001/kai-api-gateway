@@ -165,17 +165,22 @@ class AIEngine:
     def get_all_models(self) -> list[ModelInfo]:
         """Get all models from enabled providers only."""
         from provider_state import get_provider_state_manager_sync
+        from config import HIDDEN_MODEL_PREFIXES, HIDDEN_MODEL_PROVIDERS
         
         models = []
         state_manager = get_provider_state_manager_sync()
         enabled_providers = state_manager.get_enabled_provider_ids()
         
         for provider_id, provider in self._providers.items():
+            if provider_id in HIDDEN_MODEL_PROVIDERS:
+                continue
             # Only include models from enabled providers
             if provider_id not in enabled_providers:
                 continue
                 
             for model_name in provider.get_available_models():
+                if model_name.startswith(HIDDEN_MODEL_PREFIXES):
+                    continue
                 models.append(
                     ModelInfo(model=model_name, provider=provider.name)
                 )

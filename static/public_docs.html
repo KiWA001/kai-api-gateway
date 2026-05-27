@@ -445,10 +445,10 @@
                         placeholder='{"message": "What is AI?"}'>What is the capital of France?</textarea>
 
                     <select id="chat-basic-model" class="demo-select" style="margin-top:10px;">
-                        <option value="cliproxy-codex-gpt-5.5">cliproxy-codex-gpt-5.5 (Default)</option>
+                        <option value="anti-gravity-gemini-3.5-flash-low">anti-gravity-gemini-3.5-flash-low (Default)</option>
+                        <option value="cliproxy-codex-gpt-5.5">cliproxy-codex-gpt-5.5</option>
                         <option value="cliproxy-gemini-3.5-flash">cliproxy-gemini-3.5-flash</option>
                         <option value="cliproxy-claude-opus-4-7">cliproxy-claude-opus-4-7</option>
-                        <option value="pollinations-gpt-oss-20b">pollinations-gpt-oss-20b</option>
                     </select>
 
                     <button class="demo-btn" onclick="runDemo('chat-basic')">Run Request ▶</button>
@@ -482,60 +482,6 @@
                     <span class="demo-label">Try It Live</span>
                     <button class="demo-btn" onclick="runDemo('models')">Fetch Models ▶</button>
                     <div id="models-res" class="demo-response"></div>
-                </div>
-            </div>
-        </div>
-
-
-        <!-- CLI OAuth -->
-        <div class="endpoint-block">
-            <div class="endpoint-header">
-                <div class="endpoint-title">
-                    <h3>CLI OAuth Login</h3>
-                    <p>Copy the provider login URL, authenticate in your browser, then paste the final redirect URL.</p>
-                </div>
-                <span class="method-badge">POST /cli/auth/{provider}/start</span>
-            </div>
-            <div class="endpoint-body">
-                <div class="endpoint-docs">
-                    <p style="color:var(--text-secondary); font-size:14px;">
-                        Browser-based Playwright providers are disabled in Docker. Use <code>codex</code>,
-                        <code>antigravity</code>, <code>gemini</code>, <code>claude</code>, <code>xai</code>,
-                        or <code>kimi</code> instead.
-                    </p>
-                    <br>
-                    <span class="demo-label">Example Flow</span>
-                    <div class="demo-response visible" style="color: #a78bfa;">
-                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/cli/auth/codex/start \
-                        -H "Authorization: Bearer YOUR_API_KEY"
-
-                        curl -X POST https://kiwa001-kai-api-gateway.hf.space/cli/auth/codex/callback \
-                        -H "Content-Type: application/json" \
-                        -H "Authorization: Bearer YOUR_API_KEY" \
-                        -d '{"redirect_url":"PASTE_FINAL_BROWSER_REDIRECT_URL_HERE"}'
-                    </div>
-                    <p style="color: var(--text-muted); font-size: 13px; margin-top: 10px;">
-                        Use <code>GET /cli/models</code> for sidecar model aliases and <code>/cli/v1/chat/completions</code>
-                        for direct sidecar proxying.
-                    </p>
-                </div>
-                <div class="endpoint-demo">
-                    <span class="demo-label">Authorize A CLI Provider</span>
-                    <select id="cli-auth-provider" class="demo-select">
-                        <option value="codex">Codex / OpenAI</option>
-                        <option value="antigravity">Antigravity</option>
-                        <option value="gemini">Gemini CLI</option>
-                        <option value="claude">Claude Code</option>
-                        <option value="xai">xAI / Grok</option>
-                        <option value="kimi">Kimi</option>
-                    </select>
-                    <button class="demo-btn" onclick="startCliAuth()">Start Login & Copy URL</button>
-                    <textarea id="cli-auth-url" class="demo-input" rows="3" readonly placeholder="The login URL will appear here."></textarea>
-                    <textarea id="cli-redirect-url" class="demo-input" rows="3" placeholder="Paste the final redirect URL here after browser login."></textarea>
-                    <button class="demo-btn" onclick="submitCliRedirect()">Submit Redirect URL</button>
-                    <button class="demo-btn" onclick="checkCliAuthStatus()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);">Check Status</button>
-                    <div id="cli-auth-status" class="demo-status"></div>
-                    <div id="cli-auth-res" class="demo-response"></div>
                 </div>
             </div>
         </div>
@@ -599,7 +545,7 @@
     <script>
         // Global flag for Pie Chart
         window.pieChartRendered = false;
-        const DEFAULT_CHAT_MODEL = 'cliproxy-codex-gpt-5.5';
+        const DEFAULT_CHAT_MODEL = 'anti-gravity-gemini-3.5-flash-low';
         let cliAuthProvider = 'codex';
         let cliAuthState = '';
 

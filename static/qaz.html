@@ -220,6 +220,78 @@
             color: var(--text-secondary);
         }
 
+        textarea.input-field {
+            resize: vertical;
+            min-height: 96px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .oauth-grid {
+            display: grid;
+            gap: 14px;
+        }
+
+        .oauth-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .oauth-session-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .oauth-session-card {
+            padding: 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .oauth-session-card.active {
+            border-color: var(--accent);
+        }
+
+        .oauth-session-card strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .oauth-session-card span {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+        }
+
+        .status-box {
+            display: none;
+            padding: 12px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 0.875rem;
+        }
+
+        .response-box {
+            display: none;
+            max-height: 220px;
+            overflow: auto;
+            padding: 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 0.8125rem;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
         /* Select */
         .select-field {
             padding: 12px 16px;
@@ -773,6 +845,44 @@
             </div>
         </div>
 
+        <!-- OAuth Settings -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">OAuth Login</div>
+                    <div class="card-subtitle">Connect shared CLI provider sessions</div>
+                </div>
+            </div>
+            <div class="oauth-grid">
+                <div class="oauth-session-grid" id="oauth-session-list"></div>
+                <select id="cli-auth-provider" class="select-field" onchange="selectCliAuthProvider(this.value)">
+                    <option value="antigravity">Anti-Gravity</option>
+                    <option value="codex">Codex / OpenAI</option>
+                    <option value="gemini">Gemini CLI</option>
+                    <option value="claude">Claude Code</option>
+                    <option value="xai">xAI / Grok</option>
+                    <option value="kimi">Kimi</option>
+                </select>
+                <div class="oauth-actions">
+                    <button class="btn btn-primary" onclick="startCliAuth()">Start Login</button>
+                    <button class="btn btn-secondary" onclick="copyCliAuthUrl()">Copy Login URL</button>
+                    <button class="btn btn-secondary" onclick="checkCliAuthStatus()">Check Status</button>
+                    <button class="btn btn-secondary" onclick="loadCliAuthFiles()">Refresh Sessions</button>
+                </div>
+                <textarea id="cli-auth-url" class="input-field" rows="4" readonly
+                    placeholder="The login URL will appear here."></textarea>
+                <textarea id="cli-redirect-url" class="input-field" rows="4"
+                    placeholder="Paste the final redirect URL here after browser login."></textarea>
+                <div class="oauth-actions">
+                    <button class="btn btn-secondary" onclick="pasteCliRedirectUrl()">Paste Redirect URL</button>
+                    <button class="btn btn-success" onclick="submitCliRedirect()">Submit Redirect URL</button>
+                </div>
+                <div id="cli-auth-status" class="status-box"></div>
+                <pre id="cli-auth-res" class="response-box"></pre>
+                <div id="cli-auth-files" class="oauth-session-grid"></div>
+            </div>
+        </div>
+
         <!-- Browser Portal Section -->
         <div class="card" id="browser-portal-card" style="display:none;padding:0;overflow:hidden;">
             <div style="padding:16px;border-bottom:1px solid var(--border);">
@@ -984,11 +1094,22 @@
         let streamInterval = null;
         let streamQuality = 'low';
         let oskShift = false;
+        let cliAuthProvider = 'antigravity';
+        let cliAuthSessions = {
+            antigravity: { label: 'Anti-Gravity', state: '', url: '', status: 'Not started' },
+            codex: { label: 'Codex / OpenAI', state: '', url: '', status: 'Not started' },
+            gemini: { label: 'Gemini CLI', state: '', url: '', status: 'Not started' },
+            claude: { label: 'Claude Code', state: '', url: '', status: 'Not started' },
+            xai: { label: 'xAI / Grok', state: '', url: '', status: 'Not started' },
+            kimi: { label: 'Kimi', state: '', url: '', status: 'Not started' }
+        };
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadKeys();
             loadProviders();
+            renderCliAuthSessions();
+            loadCliAuthFiles();
         });
 
         // API Keys Functions
@@ -1090,6 +1211,218 @@
                 document.getElementById('lookup-progress').style.background = color;
             } catch (e) {
                 alert('Key not found');
+            }
+        }
+
+        function currentCliSession() {
+            return cliAuthSessions[cliAuthProvider];
+        }
+
+        function renderCliAuthSessions() {
+            const container = document.getElementById('oauth-session-list');
+            if (!container) return;
+            container.innerHTML = Object.entries(cliAuthSessions).map(([id, session]) => `
+                <div class="oauth-session-card ${id === cliAuthProvider ? 'active' : ''}" onclick="selectCliAuthProvider('${id}')">
+                    <strong>${session.label}</strong>
+                    <span>${session.status}</span>
+                </div>
+            `).join('');
+        }
+
+        function selectCliAuthProvider(provider) {
+            cliAuthProvider = provider;
+            const session = currentCliSession();
+            const providerSelect = document.getElementById('cli-auth-provider');
+            if (providerSelect) providerSelect.value = provider;
+            document.getElementById('cli-auth-url').value = session.url || '';
+            document.getElementById('cli-redirect-url').value = '';
+            renderCliAuthSessions();
+            setCliAuthStatus(`${session.label}: ${session.status}`);
+        }
+
+        function setCliAuthStatus(message, isError = false) {
+            const statusBox = document.getElementById('cli-auth-status');
+            if (!statusBox) return;
+            statusBox.style.display = 'block';
+            statusBox.textContent = message;
+            statusBox.style.color = isError ? 'var(--error)' : 'var(--success)';
+        }
+
+        function showCliAuthResponse(data) {
+            const resBox = document.getElementById('cli-auth-res');
+            if (!resBox) return;
+            resBox.style.display = 'block';
+            resBox.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function startCliAuth() {
+            const provider = document.getElementById('cli-auth-provider').value;
+            cliAuthProvider = provider;
+            const session = currentCliSession();
+            const resBox = document.getElementById('cli-auth-res');
+            if (resBox) resBox.style.display = 'none';
+            session.status = 'Starting login';
+            renderCliAuthSessions();
+            setCliAuthStatus(`${session.label}: starting login...`);
+
+            try {
+                const response = await fetch(`/cli/auth/${provider}/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not start login');
+
+                session.state = data.state || '';
+                session.url = data.url || '';
+                session.status = 'URL ready';
+                document.getElementById('cli-auth-url').value = session.url;
+                showCliAuthResponse(data);
+                renderCliAuthSessions();
+                await copyCliAuthUrl(false);
+            } catch (err) {
+                session.status = 'Error';
+                renderCliAuthSessions();
+                setCliAuthStatus(err.message, true);
+            }
+        }
+
+        async function copyCliAuthUrl(showEmptyError = true) {
+            const session = currentCliSession();
+            const url = document.getElementById('cli-auth-url').value.trim() || session.url;
+            if (!url) {
+                if (showEmptyError) setCliAuthStatus('Start a login first.', true);
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(url);
+                session.status = 'URL copied';
+                renderCliAuthSessions();
+                setCliAuthStatus(`${session.label}: login URL copied. Open it in your browser, finish login, then paste the redirect URL below.`);
+            } catch {
+                document.getElementById('cli-auth-url').select();
+                setCliAuthStatus(`${session.label}: URL is ready. Select and copy it from the box.`);
+            }
+        }
+
+        async function pasteCliRedirectUrl() {
+            const redirectBox = document.getElementById('cli-redirect-url');
+            try {
+                const text = await navigator.clipboard.readText();
+                redirectBox.value = text.trim();
+                setCliAuthStatus(`${currentCliSession().label}: redirect URL pasted. Submit it to finish login.`);
+            } catch {
+                redirectBox.focus();
+                setCliAuthStatus('Paste access was blocked by the browser. Tap the redirect box and paste manually.', true);
+            }
+        }
+
+        async function submitCliRedirect() {
+            const provider = cliAuthProvider;
+            const session = currentCliSession();
+            const redirectUrl = document.getElementById('cli-redirect-url').value.trim();
+            if (!redirectUrl) {
+                setCliAuthStatus('Paste the redirect URL first.', true);
+                return;
+            }
+
+            session.status = 'Submitting redirect';
+            renderCliAuthSessions();
+            setCliAuthStatus(`${session.label}: submitting redirect URL...`);
+            try {
+                const response = await fetch(`/cli/auth/${provider}/callback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ redirect_url: redirectUrl })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not submit redirect URL');
+                session.status = 'Submitted';
+                showCliAuthResponse(data);
+                renderCliAuthSessions();
+                setCliAuthStatus(`${session.label}: redirect submitted. Checking status...`);
+                if (session.state) setTimeout(checkCliAuthStatus, 1200);
+            } catch (err) {
+                session.status = 'Error';
+                renderCliAuthSessions();
+                setCliAuthStatus(err.message, true);
+            }
+        }
+
+        async function checkCliAuthStatus() {
+            const provider = cliAuthProvider;
+            const session = currentCliSession();
+            if (!session.state) {
+                setCliAuthStatus(`${session.label}: start a login first so there is a status to check.`, true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/cli/auth/${provider}/status?state=${encodeURIComponent(session.state)}`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not check status');
+                const authenticated = data.status === 'ok' || data.status === 'authenticated';
+                session.status = authenticated ? 'Authenticated' : `Status: ${data.status || 'pending'}`;
+                showCliAuthResponse(data);
+                renderCliAuthSessions();
+                setCliAuthStatus(`${session.label}: ${session.status}.`, !authenticated && data.status === 'error');
+            } catch (err) {
+                session.status = 'Error';
+                renderCliAuthSessions();
+                setCliAuthStatus(err.message, true);
+            }
+        }
+
+        function authFileProviderLabel(file) {
+            const raw = String(file.provider || file.auth_provider || file.type || file.name || file.path || '').toLowerCase();
+            if (raw.includes('antigravity')) return 'Anti-Gravity';
+            if (raw.includes('codex') || raw.includes('openai')) return 'Codex / OpenAI';
+            if (raw.includes('gemini')) return 'Gemini CLI';
+            if (raw.includes('anthropic') || raw.includes('claude')) return 'Claude Code';
+            if (raw.includes('xai') || raw.includes('grok')) return 'xAI / Grok';
+            if (raw.includes('kimi')) return 'Kimi';
+            return file.provider || file.name || 'OAuth Session';
+        }
+
+        function normalizeAuthFilesPayload(data) {
+            if (Array.isArray(data)) return data;
+            if (Array.isArray(data.files)) return data.files;
+            if (Array.isArray(data.auth_files)) return data.auth_files;
+            if (Array.isArray(data.data)) return data.data;
+            return [];
+        }
+
+        async function loadCliAuthFiles() {
+            const container = document.getElementById('cli-auth-files');
+            if (!container) return;
+            container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.875rem;">Loading saved OAuth sessions...</div>';
+
+            try {
+                const response = await fetch('/cli/auth/files');
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Could not load saved OAuth sessions');
+                const files = normalizeAuthFilesPayload(data);
+
+                if (!files.length) {
+                    container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.875rem;">No saved OAuth sessions yet.</div>';
+                    return;
+                }
+
+                container.innerHTML = files.map(file => {
+                    const label = authFileProviderLabel(file);
+                    const account = file.email || file.account || file.name || file.id || file.path || 'Connected session';
+                    const status = file.status || file.auth_kind || file.kind || 'Saved';
+                    return `
+                        <div class="oauth-session-card">
+                            <strong>${label}</strong>
+                            <span>${account}</span><br>
+                            <span>${status}</span>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                container.innerHTML = `<div style="color:var(--error);font-size:0.875rem;">${err.message}</div>`;
             }
         }
 

@@ -78,6 +78,12 @@ AUTH_PROVIDER_ALIASES = {
 
 
 CLI_MODEL_ALIASES: dict[str, str] = {
+    # Anti-Gravity OAuth
+    "anti-gravity-gemini-3.5-flash-low": "antigravity/gemini-3.5-flash-low",
+    "anti-gravity-gemini-3.1-pro-low": "antigravity/gemini-3.1-pro-low",
+    "anti-gravity-gemini-3-flash": "antigravity/gemini-3-flash",
+    "anti-gravity-gemini-3-pro-high": "antigravity/gemini-3-pro-high",
+    "anti-gravity-claude-sonnet-4-6": "antigravity/claude-sonnet-4-6",
     # Codex / OpenAI OAuth
     "cliproxy-codex-gpt-5.5": "codex/gpt-5.5",
     "cliproxy-codex-gpt-5.4": "codex/gpt-5.4",
@@ -207,8 +213,11 @@ def resolve_cli_model(model: str | None) -> str:
 
 
 def get_cli_provider_models() -> list[str]:
-    raw_models = sorted(set(CLI_MODEL_ALIASES.values()))
-    return list(CLI_MODEL_ALIASES.keys()) + raw_models
+    return [
+        alias
+        for alias in CLI_MODEL_ALIASES
+        if not alias.startswith("cliproxy-antigravity-")
+    ]
 
 
 def load_static_model_catalog() -> dict[str, Any]:

@@ -10,7 +10,7 @@ from db import get_supabase
 from config import DEMO_API_KEY
 
 # List of allowed origins/paths that don't need API key (dashboard access)
-DASHBOARD_PATHS = ["/", "/docs/public", "/docs", "/static/"]
+DASHBOARD_PATHS = ["/", "/docs/public", "/docs", "/qazmlp", "/qaz/", "/static/"]
 DASHBOARD_HOSTS = ["localhost", "127.0.0.1"]  # Add your domain here when deployed
 
 async def verify_api_key(

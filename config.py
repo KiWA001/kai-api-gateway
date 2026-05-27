@@ -17,6 +17,11 @@ import os
 # -------------------------------------------------------------------
 MODEL_RANKING = [
     # Tier 0 — OAuth-backed CLIProxyAPI sidecar models (Docker only by default)
+    ("anti-gravity-gemini-3.5-flash-low", "cli", "anti-gravity-gemini-3.5-flash-low"),
+    ("anti-gravity-gemini-3.1-pro-low", "cli", "anti-gravity-gemini-3.1-pro-low"),
+    ("anti-gravity-gemini-3-flash", "cli", "anti-gravity-gemini-3-flash"),
+    ("anti-gravity-gemini-3-pro-high", "cli", "anti-gravity-gemini-3-pro-high"),
+    ("anti-gravity-claude-sonnet-4-6", "cli", "anti-gravity-claude-sonnet-4-6"),
     ("cliproxy-codex-gpt-5.5", "cli", "cliproxy-codex-gpt-5.5"),
     ("cliproxy-codex-gpt-5.4", "cli", "cliproxy-codex-gpt-5.4"),
     ("cliproxy-codex-gpt-5.4-mini", "cli", "cliproxy-codex-gpt-5.4-mini"),
@@ -123,11 +128,14 @@ ENABLE_CLI_PROXY = os.getenv("KAI_CLI_PROXY_ENABLED", "false").lower() in {
 
 # Provider Configuration - Enable/Disable providers
 # These can be toggled via admin panel
+HIDDEN_MODEL_PROVIDERS = {"g4f", "pollinations"}
+HIDDEN_MODEL_PREFIXES = ("g4f-", "pollinations-")
+
 PROVIDERS = {
-    "g4f": {"enabled": True, "name": "G4F (Free GPT-4)", "type": "api"},
+    "g4f": {"enabled": False, "name": "G4F (Free GPT-4)", "type": "api"},
     "zai": {"enabled": ENABLE_BROWSER_PROVIDERS, "name": "Z.ai (GLM-5)", "type": "browser"},
     "gemini": {"enabled": ENABLE_BROWSER_PROVIDERS, "name": "Google Gemini Browser", "type": "browser"},
-    "pollinations": {"enabled": True, "name": "Pollinations", "type": "api"},
+    "pollinations": {"enabled": False, "name": "Pollinations", "type": "api"},
     "huggingface_widget": {"enabled": ENABLE_BROWSER_PROVIDERS, "name": "Hugging Face Widget", "type": "browser"},
     "copilot": {"enabled": False, "name": "Microsoft Copilot", "type": "browser"},
     "chatgpt": {"enabled": False, "name": "ChatGPT", "type": "browser"},
@@ -180,16 +188,16 @@ PROVIDER_MODELS = {
         "opencode-glm-4.7",
     ],
     "cli": [
+        "anti-gravity-gemini-3.5-flash-low",
+        "anti-gravity-gemini-3.1-pro-low",
+        "anti-gravity-gemini-3-flash",
+        "anti-gravity-gemini-3-pro-high",
+        "anti-gravity-claude-sonnet-4-6",
         "cliproxy-codex-gpt-5.5",
         "cliproxy-codex-gpt-5.4",
         "cliproxy-codex-gpt-5.4-mini",
         "cliproxy-codex-gpt-5.2",
         "cliproxy-codex-gpt-5.3-codex",
-        "cliproxy-antigravity-gemini-3.5-flash-low",
-        "cliproxy-antigravity-gemini-3.1-pro-low",
-        "cliproxy-antigravity-gemini-3-flash",
-        "cliproxy-antigravity-gemini-3-pro-high",
-        "cliproxy-antigravity-claude-sonnet-4-6",
         "cliproxy-gemini-3.5-flash",
         "cliproxy-gemini-3.1-pro-preview",
         "cliproxy-gemini-3.1-flash-lite-preview",

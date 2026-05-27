@@ -138,7 +138,8 @@ async def list_cli_models(_: dict = Depends(verify_api_key)):
             "routes_to": target,
             "type": "alias",
         }
-        for alias, target in sorted(CLI_MODEL_ALIASES.items())
+        for alias, target in CLI_MODEL_ALIASES.items()
+        if not alias.startswith("cliproxy-antigravity-")
     ]
 
     try:
