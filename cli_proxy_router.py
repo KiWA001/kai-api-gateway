@@ -151,6 +151,35 @@ async def restore_cli_auth_files(_: dict = Depends(verify_api_key)):
 
 @router.get("/models")
 async def list_cli_models(_: dict = Depends(verify_api_key)):
+    """
+    Returns the live model list from the Go sidecar registry.
+    Falls back to our static Python alias table if the sidecar is unavailable.
+    """
+    try:
+        response = await cli_api_request("GET", "v1/models")
+        if response.status_code < 400:
+            sidecar_data = response.json()
+            # Sidecar returns {"object": "list", "data": [{"id": ..., ...}]}
+            sidecar_models = sidecar_data.get("data", [])
+            if sidecar_models:
+                return {
+                    "status": "ok",
+                    "source": "sidecar",
+                    "models": [
+                        {
+                            "id": m.get("id"),
+                            "provider": m.get("owned_by") or m.get("type") or "unknown",
+                            "display_name": m.get("id"),
+                            "type": "live",
+                        }
+                        for m in sidecar_models
+                        if m.get("id")
+                    ],
+                }
+    except Exception:
+        pass
+
+    # Fallback: return the static Python alias list
     enabled_models = set(await get_runtime_enabled_cli_models())
     aliases = [
         {
@@ -159,28 +188,13 @@ async def list_cli_models(_: dict = Depends(verify_api_key)):
             "display_name": alias,
             "routes_to": target,
             "type": "alias",
-            "enabled": alias in enabled_models,
         }
         for alias, target in PUBLIC_CLI_MODEL_ALIASES.items()
         if alias in enabled_models
     ]
-
-    try:
-        response = await cli_api_request("GET", "v1/models")
-        if response.status_code < 400:
-            return {
-                "status": "ok",
-                "source": "sidecar",
-                "aliases": aliases,
-                "models": aliases,
-            }
-    except Exception:
-        pass
-
     return {
         "status": "ok",
         "source": "static",
-        "aliases": aliases,
         "models": aliases,
     }
 
@@ -188,15 +202,8 @@ async def list_cli_models(_: dict = Depends(verify_api_key)):
 @router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_cli_request(path: str, request: Request, _: dict = Depends(verify_api_key)):
     body = await request.body()
-    if path.lstrip("/") in {"v1/chat/completions", "chat/completions"} and body:
-        try:
-            payload = json.loads(body.decode("utf-8"))
-            if not is_cli_model_enabled(payload.get("model")):
-                raise HTTPException(status_code=403, detail=f"Model '{payload.get('model')}' is disabled.")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
+    # NOTE: no model filtering here — all requests are forwarded to the sidecar.
+    # The sidecar is the authority on what's valid.
     try:
         upstream = await cli_api_request(
             request.method,
