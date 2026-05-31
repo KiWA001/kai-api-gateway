@@ -82,11 +82,6 @@ async def http_exception_handler(_, exc: HTTPException):
     return openai_error(message=exc.detail, code=code, status_code=exc.status_code)
 
 
-@app.get("/qazmlp", include_in_schema=False)
-async def admin_page():
-    return FileResponse("static/qaz.html")
-
-
 @app.get("/docs", include_in_schema=False)
 async def public_swagger_ui():
     return get_swagger_ui_html(

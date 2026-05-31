@@ -1,224 +1,441 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>K-AI API</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #09090b;
-      --panel: #18181b;
-      --line: #2f2f36;
-      --text: #f7f7fb;
-      --muted: #a1a1aa;
-      --accent: #7c5cff;
-      --ok: #22c55e;
-      --bad: #ef4444;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    main {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 28px 16px 56px;
-    }
-    header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 24px;
-      border-bottom: 1px solid var(--line);
-      padding-bottom: 20px;
-    }
-    h1 { margin: 0 0 6px; font-size: clamp(2rem, 4vw, 3.5rem); letter-spacing: 0; }
-    p { color: var(--muted); margin: 0; font-size: 1rem; line-height: 1.6; }
-    a, button {
-      color: var(--text);
-      background: var(--accent);
-      border: 0;
-      border-radius: 8px;
-      padding: 11px 14px;
-      text-decoration: none;
-      font-weight: 700;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    section {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 18px;
-      margin-top: 16px;
-    }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    h2 { margin: 0 0 12px; font-size: 1rem; }
-    code, pre {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-    pre {
-      background: #0f0f14;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      overflow: auto;
-      white-space: pre-wrap;
-      color: #c4b5fd;
-    }
-    .model-list { display: grid; gap: 8px; }
-    .model {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #101015;
-    }
-    .model button {
-      padding: 7px 10px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-    }
-    .test-output {
-      margin-top: 12px;
-      min-height: 24px;
-      color: var(--muted);
-      overflow-wrap: anywhere;
-    }
-    .status { color: var(--ok); font-weight: 700; }
-    .error { color: var(--bad); }
-    @media (max-width: 760px) {
-      header { flex-direction: column; }
-      .grid { grid-template-columns: 1fr; }
-      a, button { width: 100%; text-align: center; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#09090b">
+    <title>K-AI API</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --surface: #18181b;
+            --surface-hover: #27272a;
+            --border: #3f3f46;
+            --text: #fafafa;
+            --text-secondary: #a1a1aa;
+            --accent: #8b5cf6;
+            --accent-hover: #7c3aed;
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .card-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
+
+        .table-container { overflow-x: auto; margin-top: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th { text-align: left; padding: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+        td { padding: 12px; border-bottom: 1px solid var(--border); }
+
+        /* Provider Grid */
+        .provider-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .provider-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .provider-card {
+            padding: 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .provider-card.active {
+            border-color: var(--accent);
+            background: var(--surface-hover);
+        }
+
+        .provider-card strong { display: block; font-size: 0.9375rem; }
+        .provider-card span { font-size: 0.75rem; color: var(--text-secondary); }
+
+        /* URL Input Row */
+        .url-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .url-row { grid-template-columns: 1fr; }
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 0.875rem;
+            font-family: inherit;
+            resize: none;
+        }
+
+        .status-box {
+            padding: 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 0.875rem;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .toggle-switch { position: relative; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border); border-radius: 24px; transition: .3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .3s; }
+        input:checked+.toggle-slider { background-color: var(--success); }
+        input:checked+.toggle-slider:before { transform: translateX(20px); }
+
+        .header-actions { display: flex; align-items: center; gap: 8px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+    </style>
 </head>
+
 <body>
-  <main>
-    <header>
-      <div>
-        <h1>K-AI API</h1>
-        <p>OpenAI-compatible gateway for CLI OAuth models. Manage OAuth sessions and enabled model routing from the admin page.</p>
-      </div>
-      <a href="/qazmlp">Admin</a>
-    </header>
+    <div class="app-container">
+        <header>
+            <h1>K-AI API</h1>
+            <div class="header-actions">
+                <div class="status-dot"></div>
+                <span style="font-size:0.875rem;color:var(--text-secondary);">Active</span>
+            </div>
+        </header>
 
-    <div class="grid">
-      <section>
-        <h2>Chat Completion</h2>
-        <pre id="chat-curl">Loading example...</pre>
-        <div id="test-output" class="test-output"></div>
-        <pre id="test-response" style="display:none;"></pre>
-      </section>
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">OAuth Sessions</div>
+                    <div class="card-subtitle">Manage connected authentication sessions</div>
+                </div>
+                <button class="btn btn-secondary" onclick="loadCliAuthFiles()">Refresh</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Active</th>
+                            <th>Provider</th>
+                            <th>Account</th>
+                            <th>Cooldown</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cli-auth-sessions-table">
+                        <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-secondary);">Loading sessions...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-      <section>
-        <h2>Current Host</h2>
-        <pre id="current-host"></pre>
-      </section>
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Add OAuth Session</div>
+                    <div class="card-subtitle">Select a provider and follow the login steps</div>
+                </div>
+            </div>
+            
+            <div class="provider-grid" id="provider-grid">
+                <!-- Populated by JS -->
+            </div>
+
+            <div id="cli-auth-status" class="status-box"></div>
+
+            <div class="url-row">
+                <div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:6px;">LOGIN URL</div>
+                    <textarea id="cli-auth-url" class="input-field" rows="3" readonly placeholder="Click 'Start Login' to generate"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="btn btn-primary" style="flex:1" onclick="startCliAuth()">Start Login</button>
+                        <button class="btn btn-secondary" onclick="copyCliAuthUrl()">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:6px;">REDIRECT URL</div>
+                    <textarea id="cli-redirect-url" class="input-field" rows="3" placeholder="Paste the final redirect URL here"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="btn btn-secondary" style="flex:1" onclick="pasteCliRedirectUrl()">Paste</button>
+                        <button class="btn btn-success" style="flex:1" onclick="submitCliRedirect()">Submit</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><div><div class="card-title">API Keys</div><div class="card-subtitle">Manage your access tokens</div></div></div>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Name</th><th>Token</th><th>Usage</th><th>Created</th><th>Action</th></tr></thead>
+                    <tbody id="keys-list"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-secondary);">Loading keys...</td></tr></tbody>
+                </table>
+            </div>
+            <button class="btn btn-primary" style="margin-top:16px;" onclick="createKey()">Create Key</button>
+        </div>
     </div>
 
-    <section>
-      <h2>Health</h2>
-      <p id="health">Checking status...</p>
-    </section>
+    <script>
+        const providers = {
+            antigravity: { label: 'Anti-Gravity', desc: 'Standard AI' },
+            codex: { label: 'Codex', desc: 'OpenAI/GPT' },
+            gemini: { label: 'Gemini', desc: 'Google AI' },
+            claude: { label: 'Claude', desc: 'Anthropic' },
+            xai: { label: 'xAI/Grok', desc: 'Elon AI' },
+            kimi: { label: 'Kimi', desc: 'Moonshot' }
+        };
 
-    <section>
-      <h2>Enabled Models</h2>
-      <div id="models" class="model-list">Loading models...</div>
-    </section>
-  </main>
+        let activeProvider = 'antigravity';
+        let authStates = {};
 
-  <script>
-    let firstModel = 'codex-gpt-5.5';
-
-    function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, (char) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      })[char]);
-    }
-
-    function renderCurl(model) {
-      const host = location.origin || 'https://kiwa001-kai-api-gateway-cli.hf.space';
-      document.getElementById('current-host').textContent = host;
-      document.getElementById('chat-curl').textContent = `curl ${host}/v1/chat/completions \\
-  -H "Content-Type: application/json" \\
-  -d '{"model":"codex-gpt-5.5","messages":[{"role":"user","content":"Hello"}]}'</pre>
-      `.replace('"codex-gpt-5.5"', `"${model || firstModel}"`);
-    }
-
-    async function loadHealth() {
-      const node = document.getElementById('health');
-      try {
-        const res = await fetch('/health');
-        const data = await res.json();
-        node.innerHTML = `<span class="${data.status === 'healthy' ? 'status' : ''}">${data.status}</span>`;
-      } catch (error) {
-        node.innerHTML = `<span class="error">Unavailable</span>`;
-      }
-    }
-
-    async function testModel(model) {
-      const status = document.getElementById('test-output');
-      const responseBox = document.getElementById('test-response');
-      status.textContent = `Testing ${model}...`;
-      responseBox.style.display = 'none';
-      try {
-        const res = await fetch('/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'user', content: 'Reply with one short sentence.' }]
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || data.error?.message || JSON.stringify(data));
-        status.innerHTML = `<span class="status">${escapeHtml(model)} works.</span>`;
-        responseBox.style.display = 'block';
-        responseBox.textContent = JSON.stringify(data, null, 2);
-      } catch (error) {
-        status.innerHTML = `<span class="error">${escapeHtml(model)} failed: ${escapeHtml(error.message)}</span>`;
-      }
-    }
-
-    async function loadModels() {
-      const node = document.getElementById('models');
-      try {
-        const res = await fetch('/models');
-        const data = await res.json();
-        const models = data.models || [];
-        if (models[0]?.model) {
-          firstModel = models[0].model;
+        function initProviderGrid() {
+            const grid = document.getElementById('provider-grid');
+            grid.innerHTML = Object.entries(providers).map(([id, info]) => `
+                <div class="provider-card ${id === activeProvider ? 'active' : ''}" onclick="selectProvider('${id}')">
+                    <strong>${info.label}</strong>
+                    <span>${info.desc}</span>
+                </div>
+            `).join('');
         }
-        renderCurl(firstModel);
-        node.innerHTML = models.length
-          ? models.map((item) => `<div class="model"><code>${escapeHtml(item.model)}</code><span>${escapeHtml(item.provider)}</span><button onclick="testModel('${escapeHtml(item.model)}')">Test</button></div>`).join('')
-          : 'No ready OAuth models yet. Add or refresh an OAuth session in Admin.';
-      } catch (error) {
-        node.textContent = 'Models unavailable.';
-        renderCurl(firstModel);
-      }
-    }
 
-    renderCurl(firstModel);
-    loadHealth();
-    loadModels();
-  </script>
+        function selectProvider(id) {
+            activeProvider = id;
+            initProviderGrid();
+            document.getElementById('cli-auth-url').value = authStates[id]?.url || '';
+            document.getElementById('cli-redirect-url').value = '';
+            setAuthStatus('');
+        }
+
+        function setAuthStatus(msg, isError = false) {
+            const box = document.getElementById('cli-auth-status');
+            if (!msg) { box.style.display = 'none'; return; }
+            box.style.display = 'block';
+            box.textContent = msg;
+            box.style.color = isError ? 'var(--error)' : 'var(--success)';
+        }
+
+        async function readJson(res) {
+            const text = await res.text();
+            try { return JSON.parse(text); } catch { throw new Error(text || 'Empty response'); }
+        }
+
+        async function loadCliAuthFiles() {
+            const tbody = document.getElementById('cli-auth-sessions-table');
+            try {
+                const res = await fetch('/qaz/auth/sessions');
+                const data = await readJson(res);
+                const files = data.files || data.auth_files || data;
+                
+                if (!Array.isArray(files) || !files.length) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-secondary);">No active sessions</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = files.map(f => {
+                    const isDisabled = f.disabled || f.status === 'disabled';
+                    const cooldown = f.next_retry_after ? new Date(f.next_retry_after).toLocaleTimeString() : 'Ready';
+                    const account = f.email || f.account || f.id || 'Connected';
+                    return `
+                        <tr>
+                            <td>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" ${!isDisabled ? 'checked' : ''} onchange="toggleSession('${f.id}', !this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </div>
+                            </td>
+                            <td><strong>${f.provider || 'Session'}</strong></td>
+                            <td style="color:var(--text-secondary);font-size:0.75rem;">${account}</td>
+                            <td style="color:${isDisabled ? 'var(--error)' : 'var(--text-secondary)'}">${isDisabled ? 'Disabled' : cooldown}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="4" style="color:var(--error);text-align:center;">${e.message}</td></tr>`;
+            }
+        }
+
+        async function toggleSession(id, disabled) {
+            try {
+                await fetch('/qaz/auth/sessions', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, disabled })
+                });
+                setTimeout(loadCliAuthFiles, 300);
+            } catch (e) { alert(e.message); loadCliAuthFiles(); }
+        }
+
+        async function startCliAuth() {
+            setAuthStatus('Requesting login URL for ' + activeProvider + '...');
+            try {
+                const res = await fetch(`/cli/auth/${activeProvider}/start`, { method: 'POST' });
+                const data = await readJson(res);
+                authStates[activeProvider] = { state: data.state, url: data.url };
+                document.getElementById('cli-auth-url').value = data.url;
+                setAuthStatus('Login URL generated. Open it in your browser.');
+            } catch (e) { setAuthStatus(e.message, true); }
+        }
+
+        async function copyCliAuthUrl() {
+            const url = document.getElementById('cli-auth-url').value;
+            if (!url) return;
+            await navigator.clipboard.writeText(url);
+            setAuthStatus('URL copied to clipboard');
+        }
+
+        async function pasteCliRedirectUrl() {
+            try {
+                document.getElementById('cli-redirect-url').value = await navigator.clipboard.readText();
+            } catch (e) { alert('Clipboard permission denied'); }
+        }
+
+        async function submitCliRedirect() {
+            const redirect = document.getElementById('cli-redirect-url').value.trim();
+            if (!redirect) return;
+            setAuthStatus('Verifying session...');
+            try {
+                await fetch(`/cli/auth/${activeProvider}/callback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ redirect_url: redirect })
+                });
+                setAuthStatus('Session successfully connected!');
+                setTimeout(loadCliAuthFiles, 1500);
+            } catch (e) { setAuthStatus(e.message, true); }
+        }
+
+        async function loadKeys() {
+            const tbody = document.getElementById('keys-list');
+            try {
+                const res = await fetch('/qaz/keys');
+                const keys = await readJson(res);
+                tbody.innerHTML = keys.map(k => `
+                    <tr>
+                        <td>${k.name}</td>
+                        <td style="font-family:monospace;font-size:0.75rem;">${k.token.substring(0, 12)}...</td>
+                        <td>${Math.round((k.usage_tokens / k.limit_tokens) * 100)}%</td>
+                        <td style="font-size:0.75rem;">${new Date(k.created_at).toLocaleDateString()}</td>
+                        <td><button class="btn btn-danger" style="padding:4px 8px;font-size:0.7rem;" onclick="revokeKey('${k.id}')">Revoke</button></td>
+                    </tr>
+                `).join('');
+            } catch (e) { tbody.innerHTML = `<tr><td colspan="5">${e.message}</td></tr>`; }
+        }
+
+        async function createKey() {
+            const name = prompt('Key Name:'); if (!name) return;
+            const res = await fetch('/qaz/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, limit_tokens: 1000000 }) });
+            const data = await readJson(res);
+            alert('New Key: ' + data.token);
+            loadKeys();
+        }
+
+        async function revokeKey(id) { if (confirm('Delete?')) { await fetch(`/qaz/keys/${id}`, { method: 'DELETE' }); loadKeys(); } }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initProviderGrid();
+            loadCliAuthFiles();
+            loadKeys();
+        });
+    </script>
 </body>
+
 </html>
