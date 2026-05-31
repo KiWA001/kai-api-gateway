@@ -105,12 +105,6 @@ async def chat_completions(
     """
     OpenAI-compatible Chat Completion Endpoint.
     """
-    if not is_cli_model_enabled(request.model):
-        return openai_error(
-            f"Model '{request.model}' is disabled. Enable it in the admin model settings.",
-            "model_disabled",
-            403,
-        )
 
     try:
         payload = request.model_dump()
