@@ -11,7 +11,7 @@ from db import get_supabase
 from local_db import increment_usage as local_increment_usage
 from services import engine
 from utils import calculate_usage
-from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, is_cli_model_enabled, resolve_cli_model, disable_cli_auth_session
+from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, is_cli_model_enabled, resolve_cli_model, disable_cli_auth_session, cli_model_provider
 from error_handling import (
     openai_error,
     error_invalid_api_key,
