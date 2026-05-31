@@ -556,7 +556,7 @@
             </div>
         </header>
 
-        <div class="card">
+        <div class="card" style="display:none;">
             <div class="card-header">
                 <div><div class="card-title">API Keys</div><div class="card-subtitle">Manage access tokens</div></div>
                 <button class="btn btn-success" onclick="createKey()">+ New Key</button>
@@ -566,7 +566,7 @@
             </div>
         </div>
 
-        <div class="card">
+        <div class="card" style="display:none;">
             <div class="card-title" style="margin-bottom:12px;">Check Usage</div>
             <div class="input-group"><input type="text" id="lookup-token" class="input-field" placeholder="Enter API key (sk-...)"><button class="btn btn-primary" onclick="lookupToken()">Check</button></div>
             <div id="lookup-result" style="display:none;margin-top:16px;padding:16px;background:var(--bg);border-radius:10px;">
@@ -607,7 +607,7 @@
         };
         let modelSettings = [];
 
-        document.addEventListener('DOMContentLoaded', () => { loadKeys(); renderCliAuthSessions(); loadCliAuthFiles(); loadModelSettings(); });
+        document.addEventListener('DOMContentLoaded', () => { renderCliAuthSessions(); loadCliAuthFiles(); loadModelSettings(); });
 
         async function readJsonResponse(response) {
             const text = await response.text();

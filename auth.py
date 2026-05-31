@@ -1,101 +1,17 @@
-"""
-Authentication Module
----------------------
-Shared authentication logic for dashboard vs external API access.
-"""
+"""Authentication Module."""
 
-from fastapi import HTTPException, Request, Header
+from fastapi import Request, Header
 from typing import Optional
-from auth_cache import get_cached_api_key
-from config import DEMO_API_KEY
-
-# List of allowed origins/paths that don't need API key (dashboard access)
-DASHBOARD_PATHS = ["/", "/docs/public", "/docs", "/qazmlp", "/qaz/", "/static/"]
-DASHBOARD_HOSTS = ["localhost", "127.0.0.1"]  # Add your domain here when deployed
 
 async def verify_api_key(
     request: Request,
     authorization: Optional[str] = Header(None),
     x_api_key: Optional[str] = Header(None)
 ):
-    """
-    Verify Bearer Token or X-API-KEY.
-    Dashboard requests (from same origin) don't need API key.
-    External API calls (from other origins) require API key.
-    CLI OAuth requests require a valid key and deduct usage normally.
-    
-    Returns: key_data (dict) 
-    Raises: HTTPException if invalid
-    """
-    token = None
-    if authorization:
-        parts = authorization.split()
-        if len(parts) == 2 and parts[0].lower() == "bearer":
-            token = parts[1]
-    
-    if not token and x_api_key:
-        token = x_api_key
-    
-    # Check if request is coming from dashboard (same origin)
-    referer = request.headers.get("referer", "")
-    origin = request.headers.get("origin", "")
-    
-    # Check if referer/origin matches dashboard
-    is_dashboard_request = False
-    
-    # Check if referer contains dashboard paths
-    for path in DASHBOARD_PATHS:
-        if path in referer:
-            is_dashboard_request = True
-            break
-    
-    # Also check if origin is localhost (local development)
-    for host in DASHBOARD_HOSTS:
-        if host in origin or host in referer:
-            is_dashboard_request = True
-            break
-    
-    # Allow public HTML pages to load without an API key.
-    accept_header = request.headers.get("accept", "")
-    if "text/html" in accept_header and (referer or origin):
-        is_dashboard_request = True
-    
-    if not token:
-        if is_dashboard_request:
-            # Dashboard access - no key needed
-            return {"id": "dashboard", "name": "Dashboard User", "limit_tokens": -1, "is_dashboard": True}
-        else:
-            # External API call - key required
-            raise HTTPException(
-                status_code=401, 
-                detail="Authorization header required. Use 'Authorization: Bearer YOUR_API_KEY'. Get a key from the dashboard."
-            )
-
-    # 1. Check Demo Key
-    if token == DEMO_API_KEY:
-        return {"id": "demo", "name": "Demo User", "limit_tokens": -1, "is_dashboard": False}
-
-    try:
-        key_data = get_cached_api_key(token)
-
-        if not key_data:
-             raise HTTPException(status_code=401, detail="Incorrect API key provided")
-
-        if not key_data.get("is_active", True):
-            raise HTTPException(status_code=403, detail="API Key is inactive")
-
-        # Check limits
-        current_usage = key_data.get("usage_tokens", 0)
-        limit = key_data.get("limit_tokens", 0)
-
-        if limit > 0 and current_usage >= limit:
-             raise HTTPException(status_code=429, detail="You have exceeded your current quota")
-
-        key_data["is_dashboard"] = False
-        return key_data
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Auth Error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    return {
+        "id": "open",
+        "name": "Open Access",
+        "limit_tokens": -1,
+        "is_dashboard": True,
+        "auth_ignored": True,
+    }

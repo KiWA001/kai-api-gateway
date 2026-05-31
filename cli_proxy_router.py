@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -52,22 +51,6 @@ async def list_cli_auth_providers(_: dict = Depends(verify_api_key)):
 async def start_cli_auth(provider: str, _: dict = Depends(verify_api_key)):
     try:
         provider_id = canonical_auth_provider(provider)
-        if provider_id == "antigravity" and (
-            not os.getenv("ANTIGRAVITY_OAUTH_CLIENT_ID", "").strip()
-            or not os.getenv("ANTIGRAVITY_OAUTH_CLIENT_SECRET", "").strip()
-        ):
-            raise HTTPException(
-                status_code=500,
-                detail="Anti-Gravity OAuth is missing ANTIGRAVITY_OAUTH_CLIENT_ID or ANTIGRAVITY_OAUTH_CLIENT_SECRET on the server.",
-            )
-        if provider_id == "gemini" and (
-            not os.getenv("GEMINI_OAUTH_CLIENT_ID", "").strip()
-            or not os.getenv("GEMINI_OAUTH_CLIENT_SECRET", "").strip()
-        ):
-            raise HTTPException(
-                status_code=500,
-                detail="Gemini CLI OAuth is missing GEMINI_OAUTH_CLIENT_ID or GEMINI_OAUTH_CLIENT_SECRET on the server.",
-            )
         meta = AUTH_PROVIDERS[provider_id]
         payload = await cli_management_request(
             "GET",
