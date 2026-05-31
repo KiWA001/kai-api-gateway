@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
@@ -15,7 +15,8 @@ from cli_proxy import (
     canonical_auth_provider,
     cli_api_request,
     cli_management_request,
-    flattened_static_cli_models,
+    get_enabled_cli_models,
+    is_cli_model_enabled,
 )
 
 
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/cli", tags=["CLI Proxy"])
 class OAuthCallbackRequest(BaseModel):
     redirect_url: str = Field(
         ...,
-        description="Full redirect URL copied from the browser after provider login.",
+        description="Full redirect URL copied after provider login.",
     )
 
 
@@ -88,7 +89,7 @@ async def start_cli_auth(provider: str, _: dict = Depends(verify_api_key)):
         "label": meta["label"],
         "url": auth_url,
         "state": state,
-        "instructions": f"Open this URL in your browser, finish login, then paste the final redirect URL into /cli/auth/{provider_id}/callback.",
+        "instructions": f"Open this URL, finish login, then paste the final redirect URL into /cli/auth/{provider_id}/callback.",
     }
 
 
@@ -148,7 +149,7 @@ async def list_cli_auth_files(_: dict = Depends(verify_api_key)):
 
 @router.get("/models")
 async def list_cli_models(_: dict = Depends(verify_api_key)):
-    static_models = flattened_static_cli_models()
+    enabled_models = set(get_enabled_cli_models())
     aliases = [
         {
             "id": alias,
@@ -156,20 +157,20 @@ async def list_cli_models(_: dict = Depends(verify_api_key)):
             "display_name": alias,
             "routes_to": target,
             "type": "alias",
+            "enabled": alias in enabled_models,
         }
         for alias, target in PUBLIC_CLI_MODEL_ALIASES.items()
+        if alias in enabled_models
     ]
 
     try:
         response = await cli_api_request("GET", "v1/models")
         if response.status_code < 400:
-            payload: dict[str, Any] = response.json()
             return {
                 "status": "ok",
                 "source": "sidecar",
                 "aliases": aliases,
-                "models": payload,
-                "static_catalog": static_models,
+                "models": aliases,
             }
     except Exception:
         pass
@@ -178,13 +179,22 @@ async def list_cli_models(_: dict = Depends(verify_api_key)):
         "status": "ok",
         "source": "static",
         "aliases": aliases,
-        "models": static_models,
+        "models": aliases,
     }
 
 
 @router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def proxy_cli_request(path: str, request: Request, _: dict = Depends(verify_api_key)):
     body = await request.body()
+    if path.lstrip("/") in {"v1/chat/completions", "chat/completions"} and body:
+        try:
+            payload = json.loads(body.decode("utf-8"))
+            if not is_cli_model_enabled(payload.get("model")):
+                raise HTTPException(status_code=403, detail=f"Model '{payload.get('model')}' is disabled.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     try:
         upstream = await cli_api_request(
             request.method,

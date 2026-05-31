@@ -154,6 +154,10 @@ CLI_MODEL_ALIASES: dict[str, str] = {
     **LEGACY_CLI_MODEL_ALIASES,
 }
 
+MODEL_SETTINGS_KEY = "enabled_cli_models"
+DEFAULT_ENABLED_CLI_MODELS = list(PUBLIC_CLI_MODEL_ALIASES.keys())
+LOCAL_SETTINGS_PATH = Path(os.getenv("KAI_LOCAL_SETTINGS_PATH", "/tmp/kai-api-settings.json"))
+
 
 def canonical_auth_provider(provider: str) -> str:
     normalized = provider.strip().lower()
@@ -240,12 +244,86 @@ async def cli_api_request(
 
 def resolve_cli_model(model: str | None) -> str:
     if not model:
-        return "codex/gpt-5.5"
+        return PUBLIC_CLI_MODEL_ALIASES[DEFAULT_ENABLED_CLI_MODELS[0]]
     return CLI_MODEL_ALIASES.get(model, model)
 
 
 def get_cli_provider_models() -> list[str]:
     return list(PUBLIC_CLI_MODEL_ALIASES.keys())
+
+
+def _read_local_settings() -> dict[str, Any]:
+    try:
+        return json.loads(LOCAL_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_local_settings(settings: dict[str, Any]) -> None:
+    LOCAL_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LOCAL_SETTINGS_PATH.write_text(json.dumps(settings), encoding="utf-8")
+
+
+def _normalize_enabled_models(models: Any, *, default_if_missing: bool) -> list[str]:
+    if not isinstance(models, list):
+        return DEFAULT_ENABLED_CLI_MODELS.copy() if default_if_missing else []
+    valid = set(PUBLIC_CLI_MODEL_ALIASES)
+    return [model for model in models if isinstance(model, str) and model in valid]
+
+
+def get_enabled_cli_models() -> list[str]:
+    try:
+        from db import get_supabase
+
+        supabase = get_supabase()
+        if supabase:
+            result = supabase.table("kaiapi_settings").select("value").eq("key", MODEL_SETTINGS_KEY).execute()
+            if result.data:
+                return _normalize_enabled_models(result.data[0].get("value"), default_if_missing=False)
+    except Exception:
+        pass
+
+    local_settings = _read_local_settings()
+    if MODEL_SETTINGS_KEY in local_settings:
+        return _normalize_enabled_models(local_settings.get(MODEL_SETTINGS_KEY), default_if_missing=False)
+    return DEFAULT_ENABLED_CLI_MODELS.copy()
+
+
+def set_enabled_cli_models(models: list[str]) -> list[str]:
+    enabled = _normalize_enabled_models(models, default_if_missing=False)
+    saved = False
+    try:
+        from db import get_supabase
+
+        supabase = get_supabase()
+        if supabase:
+            supabase.table("kaiapi_settings").upsert(
+                {"key": MODEL_SETTINGS_KEY, "value": enabled}
+            ).execute()
+            saved = True
+    except Exception:
+        saved = False
+
+    if not saved:
+        local_settings = _read_local_settings()
+        local_settings[MODEL_SETTINGS_KEY] = enabled
+        _write_local_settings(local_settings)
+    return enabled
+
+
+def is_cli_model_enabled(model: str | None) -> bool:
+    if not model or model == "auto":
+        return True
+    public_name = model if model in PUBLIC_CLI_MODEL_ALIASES else None
+    if not public_name:
+        for alias, target in LEGACY_CLI_MODEL_ALIASES.items():
+            if alias == model:
+                for clean_alias, clean_target in PUBLIC_CLI_MODEL_ALIASES.items():
+                    if clean_target == target:
+                        public_name = clean_alias
+                        break
+                break
+    return bool(public_name and public_name in set(get_enabled_cli_models()))
 
 
 def load_static_model_catalog() -> dict[str, Any]:

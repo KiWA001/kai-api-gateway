@@ -9,9 +9,6 @@ set -eu
 : "${KAI_CLI_PROXY_CONFIG_PATH:=/tmp/cliproxy/config.yaml}"
 : "${KAI_CLI_PROXY_AUTH_DIR:=/tmp/cliproxy/auths}"
 
-export KAI_ENABLE_BROWSER_PROVIDERS="${KAI_ENABLE_BROWSER_PROVIDERS:-false}"
-export KAI_HIDE_BROWSER_PROVIDERS="${KAI_HIDE_BROWSER_PROVIDERS:-true}"
-
 cliproxy_pid=""
 
 if [ "$KAI_CLI_PROXY_ENABLED" = "true" ] || [ "$KAI_CLI_PROXY_ENABLED" = "1" ]; then
@@ -31,6 +28,17 @@ debug: false
 logging-to-file: false
 usage-statistics-enabled: false
 ws-auth: true
+request-retry: 3
+max-retry-credentials: 0
+max-retry-interval: 30
+disable-cooling: false
+quota-exceeded:
+  switch-project: true
+  switch-preview-model: true
+  antigravity-credits: true
+routing:
+  strategy: "round-robin"
+  session-affinity: false
 EOF
 
   export MANAGEMENT_PASSWORD="$KAI_CLI_PROXY_MANAGEMENT_KEY"

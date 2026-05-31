@@ -1,60 +1,5 @@
--- ============================================
--- K-AI API Gateway - Complete Supabase SQL Setup
--- ============================================
--- This script handles both creating tables with kaiapi_ prefix
--- and migrating data from old tables (if they exist)
+-- K-AI API Gateway - Supabase SQL Setup
 
--- ============================================
--- STEP 1: Rename existing tables to add kaiapi_ prefix
--- ============================================
-
--- Rename api_keys table if it exists
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables 
-               WHERE table_schema = 'public' 
-               AND table_name = 'api_keys') THEN
-        ALTER TABLE api_keys RENAME TO kaiapi_api_keys;
-        RAISE NOTICE 'Renamed api_keys to kaiapi_api_keys';
-    END IF;
-END $$;
-
--- Rename model_stats table if it exists
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables 
-               WHERE table_schema = 'public' 
-               AND table_name = 'model_stats') THEN
-        ALTER TABLE model_stats RENAME TO kaiapi_model_stats;
-        RAISE NOTICE 'Renamed model_stats to kaiapi_model_stats';
-    END IF;
-END $$;
-
--- Rename provider_sessions table if it exists
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables 
-               WHERE table_schema = 'public' 
-               AND table_name = 'provider_sessions') THEN
-        ALTER TABLE provider_sessions RENAME TO kaiapi_provider_sessions;
-        RAISE NOTICE 'Renamed provider_sessions to kaiapi_provider_sessions';
-    END IF;
-END $$;
-
--- Rename provider_states table if it exists (for consistency)
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables 
-               WHERE table_schema = 'public' 
-               AND table_name = 'provider_states') THEN
-        ALTER TABLE provider_states RENAME TO kaiapi_provider_states;
-        RAISE NOTICE 'Renamed provider_states to kaiapi_provider_states';
-    END IF;
-END $$;
-
--- ============================================
--- STEP 2: Create kaiapi_api_keys table (if not exists)
--- ============================================
 CREATE TABLE IF NOT EXISTS kaiapi_api_keys (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -69,9 +14,6 @@ CREATE TABLE IF NOT EXISTS kaiapi_api_keys (
 CREATE INDEX IF NOT EXISTS idx_kaiapi_api_keys_token ON kaiapi_api_keys(token);
 CREATE INDEX IF NOT EXISTS idx_kaiapi_api_keys_is_active ON kaiapi_api_keys(is_active);
 
--- ============================================
--- STEP 3: Create kaiapi_model_stats table (if not exists)
--- ============================================
 CREATE TABLE IF NOT EXISTS kaiapi_model_stats (
     id VARCHAR(255) PRIMARY KEY,
     success INTEGER NOT NULL DEFAULT 0,
@@ -86,52 +28,13 @@ CREATE TABLE IF NOT EXISTS kaiapi_model_stats (
 
 CREATE INDEX IF NOT EXISTS idx_kaiapi_model_stats_id ON kaiapi_model_stats(id);
 
--- ============================================
--- STEP 4: Create kaiapi_provider_sessions table (if not exists)
--- ============================================
-CREATE TABLE IF NOT EXISTS kaiapi_provider_sessions (
-    id SERIAL PRIMARY KEY,
-    provider VARCHAR(50) UNIQUE NOT NULL,
-    cookies JSONB,
-    session_data JSONB,
+CREATE TABLE IF NOT EXISTS kaiapi_settings (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_kaiapi_provider_sessions_provider ON kaiapi_provider_sessions(provider);
-
--- ============================================
--- STEP 5: Create kaiapi_provider_states table (NEW - for toggle management)
--- ============================================
-CREATE TABLE IF NOT EXISTS kaiapi_provider_states (
-    id SERIAL PRIMARY KEY,
-    provider_id VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    type VARCHAR(20) NOT NULL DEFAULT 'api',
-    enabled BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_kaiapi_provider_states_provider_id ON kaiapi_provider_states(provider_id);
-CREATE INDEX IF NOT EXISTS idx_kaiapi_provider_states_enabled ON kaiapi_provider_states(enabled);
-
--- Insert default providers (if table is empty)
-INSERT INTO kaiapi_provider_states (provider_id, name, type, enabled) VALUES
-    ('g4f', 'G4F (Free GPT-4)', 'api', true),
-    ('zai', 'Z.ai (GLM-5)', 'api', true),
-    ('gemini', 'Google Gemini', 'api', true),
-    ('pollinations', 'Pollinations', 'api', true),
-    ('huggingchat', 'HuggingChat', 'browser', true),
-    ('copilot', 'Microsoft Copilot', 'browser', false),
-    ('chatgpt', 'ChatGPT', 'browser', false)
-ON CONFLICT (provider_id) DO NOTHING;
-
--- ============================================
--- STEP 6: Create helper functions and triggers
--- ============================================
-
--- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -140,7 +43,6 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Create triggers for all tables
 DROP TRIGGER IF EXISTS update_kaiapi_api_keys_updated_at ON kaiapi_api_keys;
 CREATE TRIGGER update_kaiapi_api_keys_updated_at
     BEFORE UPDATE ON kaiapi_api_keys
@@ -153,63 +55,8 @@ CREATE TRIGGER update_kaiapi_model_stats_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_kaiapi_provider_sessions_updated_at ON kaiapi_provider_sessions;
-CREATE TRIGGER update_kaiapi_provider_sessions_updated_at
-    BEFORE UPDATE ON kaiapi_provider_sessions
+DROP TRIGGER IF EXISTS update_kaiapi_settings_updated_at ON kaiapi_settings;
+CREATE TRIGGER update_kaiapi_settings_updated_at
+    BEFORE UPDATE ON kaiapi_settings
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_kaiapi_provider_states_updated_at ON kaiapi_provider_states;
-CREATE TRIGGER update_kaiapi_provider_states_updated_at
-    BEFORE UPDATE ON kaiapi_provider_states
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
--- ============================================
--- STEP 7: Enable Row Level Security (Optional)
--- ============================================
--- Uncomment the following lines if you want to enable RLS
-
--- ALTER TABLE kaiapi_api_keys ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE kaiapi_model_stats ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE kaiapi_provider_sessions ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE kaiapi_provider_states ENABLE ROW LEVEL SECURITY;
-
--- Create policy to allow all operations (adjust as needed)
--- CREATE POLICY "Allow all operations on kaiapi_api_keys" 
---     ON kaiapi_api_keys 
---     FOR ALL 
---     TO anon, authenticated 
---     USING (true) 
---     WITH CHECK (true);
-
--- CREATE POLICY "Allow all operations on kaiapi_model_stats" 
---     ON kaiapi_model_stats 
---     FOR ALL 
---     TO anon, authenticated 
---     USING (true) 
---     WITH CHECK (true);
-
--- CREATE POLICY "Allow all operations on kaiapi_provider_sessions" 
---     ON kaiapi_provider_sessions 
---     FOR ALL 
---     TO anon, authenticated 
---     USING (true) 
---     WITH CHECK (true);
-
--- CREATE POLICY "Allow all operations on kaiapi_provider_states" 
---     ON kaiapi_provider_states 
---     FOR ALL 
---     TO anon, authenticated 
---     USING (true) 
---     WITH CHECK (true);
-
--- ============================================
--- VERIFICATION: Check all created tables
--- ============================================
-SELECT 'Tables created successfully:' as message;
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
-AND table_name LIKE 'kaiapi_%'
-ORDER BY table_name;

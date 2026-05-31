@@ -9,7 +9,7 @@ from auth import verify_api_key
 from db import get_supabase
 from services import engine
 from utils import calculate_usage
-from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, resolve_cli_model
+from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, is_cli_model_enabled, resolve_cli_model
 from error_handling import (
     openai_error,
     error_invalid_api_key,
@@ -99,108 +99,43 @@ async def chat_completions(
     """
     OpenAI-compatible Chat Completion Endpoint.
     """
-    provider = request.provider or "auto"
-    use_cli_proxy = (
-        provider in {"cli", "cliproxy"}
-        or request.model in CLI_MODEL_ALIASES
-        or (request.model or "").startswith(("codex/", "claude/", "gemini/", "antigravity/", "xai/", "kimi/"))
-    )
+    if not is_cli_model_enabled(request.model):
+        return openai_error(
+            f"Model '{request.model}' is disabled. Enable it in the admin model settings.",
+            "model_disabled",
+            403,
+        )
 
-    if use_cli_proxy:
-        try:
-            payload = request.model_dump()
-            payload["model"] = resolve_cli_model(request.model)
-            payload.pop("provider", None)
-            response = await cli_api_request(
-                "POST",
-                "v1/chat/completions",
-                json_body=payload,
-                headers={"content-type": "application/json"},
-            )
-            try:
-                data = response.json()
-            except Exception:
-                return openai_error(
-                    response.text or "CLI proxy returned a non-JSON response",
-                    "upstream_error",
-                    response.status_code,
-                )
-
-            if response.status_code >= 400:
-                return JSONResponse(data, status_code=response.status_code)
-
-            response_text = (
-                data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
-            usage = data.get("usage") or calculate_usage([m.model_dump() for m in request.messages], response_text)
-            if not key_data.get("is_dashboard", False):
-                background_tasks.add_task(update_usage_stats, key_data["id"], usage.get("total_tokens", 0))
-            return JSONResponse(data)
-        except Exception as e:
-            return error_server(f"CLI proxy request failed: {e}")
-
-    # Convert messages list to simple prompt (or keep as list if engine supports it)
-    # Our engine currently takes a single prompt string + optional system prompt.
-    
-    system_prompt = None
-    user_prompt = ""
-    
-    # Simple conversion logic
-    for m in request.messages:
-        if m.role == "system":
-            system_prompt = m.content
-        elif m.role == "user":
-            if user_prompt:
-                user_prompt += f"\n\n[User]: {m.content}"
-            else:
-                user_prompt = m.content
-        elif m.role == "assistant":
-            user_prompt += f"\n\n[Assistant]: {m.content}"
-            
-    # Call Engine
     try:
-        if not engine:
-            raise HTTPException(status_code=503, detail="AI Engine is not initialized (Startup Error)")
-            
-        result = await engine.chat(
-            prompt=user_prompt,
-            model=request.model,
-            provider=provider,
-            system_prompt=system_prompt
+        payload = request.model_dump()
+        payload["model"] = resolve_cli_model(request.model)
+        payload.pop("provider", None)
+        response = await cli_api_request(
+            "POST",
+            "v1/chat/completions",
+            json_body=payload,
+            headers={"content-type": "application/json"},
         )
-        
-        response_text = result["response"]
-        actual_model = result["model"]
-        
-        # Calculate Usage
-        usage = calculate_usage([m.dict() for m in request.messages], response_text)
-        
-        # Background: Update DB (only for non-dashboard keys)
-        if not key_data.get("is_dashboard", False):
-            background_tasks.add_task(update_usage_stats, key_data["id"], usage["total_tokens"])
-        
-        # Construct Response
-        return ChatCompletionResponse(
-            id=f"chatcmpl-{uuid.uuid4().hex[:8]}",
-            created=int(time.time()),
-            model=actual_model,
-            choices=[
-                ChatCompletionChoice(
-                    index=0,
-                    message=ChatMessage(role="assistant", content=response_text),
-                    finish_reason="stop"
-                )
-            ],
-            usage=UsageInfo(**usage)
-        )
+        try:
+            data = response.json()
+        except Exception:
+            return openai_error(
+                response.text or "CLI proxy returned a non-JSON response",
+                "upstream_error",
+                response.status_code,
+            )
 
-    except ValueError as e:
-        # Invalid model or params
-        # We need to return the JSON response object, but we are inside an async endpoint.
-        # Direct return works!
-        return error_model_not_found(request.model) if "model" in str(e) else openai_error(str(e), "invalid_request_error")
-        
+        if response.status_code >= 400:
+            return JSONResponse(data, status_code=response.status_code)
+
+        response_text = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
+        usage = data.get("usage") or calculate_usage([m.model_dump() for m in request.messages], response_text)
+        if not key_data.get("is_dashboard", False):
+            background_tasks.add_task(update_usage_stats, key_data["id"], usage.get("total_tokens", 0))
+        return JSONResponse(data)
     except Exception as e:
-        return error_server(str(e))
+        return error_server(f"CLI proxy request failed: {e}")

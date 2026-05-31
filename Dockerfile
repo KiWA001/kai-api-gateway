@@ -13,8 +13,6 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     HOME=/tmp/kai-home \
     PORT=7860 \
-    KAI_ENABLE_BROWSER_PROVIDERS=false \
-    KAI_HIDE_BROWSER_PROVIDERS=true \
     KAI_CLI_PROXY_ENABLED=true \
     KAI_CLI_PROXY_URL=http://127.0.0.1:8317 \
     KAI_CLI_PROXY_API_KEY=sk-kai-cli-proxy \
@@ -27,7 +25,7 @@ ENV PYTHONUNBUFFERED=1 \
     ANTIGRAVITY_OAUTH_CLIENT_SECRET=
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl libsndfile1 \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

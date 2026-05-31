@@ -22,7 +22,7 @@ async def verify_api_key(
     Verify Bearer Token or X-API-KEY.
     Dashboard requests (from same origin) don't need API key.
     External API calls (from other origins) require API key.
-    Web searches require key but don't deduct tokens.
+    CLI OAuth requests require a valid key and deduct usage normally.
     
     Returns: key_data (dict) 
     Raises: HTTPException if invalid
@@ -55,7 +55,7 @@ async def verify_api_key(
             is_dashboard_request = True
             break
     
-    # Check if it's a browser request (has Accept: text/html)
+    # Allow public HTML pages to load without an API key.
     accept_header = request.headers.get("accept", "")
     if "text/html" in accept_header and (referer or origin):
         is_dashboard_request = True

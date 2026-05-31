@@ -23,7 +23,7 @@ class ChatRequest(BaseModel):
     )
     provider: Optional[str] = Field(
         default="auto",
-        description="Provider to use: 'auto', 'g4f', or 'pollinations'. If omitted, tries all.",
+        description="Provider to use. Only CLI OAuth routing is supported.",
     )
     system_prompt: Optional[str] = Field(
         default=None,
