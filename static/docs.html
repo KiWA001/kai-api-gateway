@@ -269,8 +269,13 @@
                     <div class="card-subtitle">Test your connection using a CURL example</div>
                 </div>
             </div>
-            <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:8px;">CURL EXAMPLE</div>
-            <pre id="curl-example" style="background:var(--bg);padding:12px;border:1px solid var(--border);border-radius:10px;font-family:monospace;font-size:0.8125rem;color:#c4b5fd;white-space:pre-wrap;overflow-wrap:anywhere;margin-bottom:16px;"></pre>
+            <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-size:0.75rem;color:var(--text-secondary);">CURL EXAMPLE</div>
+                <div onclick="renderCurl()" style="cursor:pointer; color:var(--text-secondary); height:16px;" title="Reset CURL">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </div>
+            </div>
+            <textarea id="curl-example" class="input-field" style="background:var(--bg); color:#c4b5fd; font-family:monospace; font-size:0.8125rem; height:120px; margin-bottom:16px;"></textarea>
             <div style="display:flex;gap:8px;margin-bottom:16px;">
                 <button class="btn btn-primary" onclick="runCurlTest()">Run Test</button>
                 <button class="btn btn-secondary" onclick="copyCurl()">Copy CURL</button>
@@ -411,18 +416,18 @@
 
         function renderCurl() {
             const host = window.location.origin || 'https://kiwa001-kai-api-gateway-cli.hf.space';
-            const model = Object.keys(authStates).length > 0 ? `${activeProvider}-gpt-4o` : 'codex-gpt-4o';
+            const model = `${activeProvider}-gpt-4o`;
             const curl = `curl ${host}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "${model}",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`;
-            document.getElementById('curl-example').textContent = curl;
+            document.getElementById('curl-example').value = curl;
         }
 
         async function copyCurl() {
-            const curl = document.getElementById('curl-example').textContent;
+            const curl = document.getElementById('curl-example').value;
             await navigator.clipboard.writeText(curl);
             setAuthStatus('CURL command copied');
         }
@@ -430,30 +435,42 @@
         async function runCurlTest() {
             const status = document.getElementById('test-status');
             const resBox = document.getElementById('test-response');
+            const curlText = document.getElementById('curl-example').value;
+            
             status.style.display = 'block';
             status.textContent = 'Running test...';
             status.style.color = 'var(--text-secondary)';
             resBox.style.display = 'none';
 
+            let payload = {};
             try {
-                const model = Object.keys(authStates).length > 0 ? `${activeProvider}-gpt-4o` : 'codex-gpt-4o';
+                const match = curlText.match(/-d\s+'([\s\S]+?)'/);
+                if (match) {
+                    payload = JSON.parse(match[1]);
+                } else {
+                    // try parsing the whole thing if it's just JSON
+                    payload = JSON.parse(curlText);
+                }
+            } catch (e) {
+                status.textContent = 'Invalid CURL or JSON: ' + e.message;
+                status.style.color = 'var(--error)';
+                return;
+            }
+
+            try {
                 const res = await fetch('/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: model,
-                        messages: [{ role: 'user', content: 'Say hello in one word.' }]
-                    })
+                    body: JSON.stringify(payload)
                 });
                 const data = await readJson(res);
-                if (!res.ok) throw new Error(data.detail || data.error?.message || JSON.stringify(data));
                 
-                status.textContent = 'Test successful!';
-                status.style.color = 'var(--success)';
+                status.textContent = res.ok ? 'Test successful!' : 'Test failed (Upstream)';
+                status.style.color = res.ok ? 'var(--success)' : 'var(--error)';
                 resBox.style.display = 'block';
                 resBox.textContent = JSON.stringify(data, null, 2);
             } catch (e) {
-                status.textContent = 'Test failed: ' + e.message;
+                status.textContent = 'Request failed: ' + e.message;
                 status.style.color = 'var(--error)';
             }
         }

@@ -117,6 +117,12 @@ async def chat_completions(
         payload["model"] = resolve_cli_model(request.model)
         payload.pop("provider", None)
         
+        provider_id = cli_model_provider(request.model)
+        headers = {
+            "content-type": "application/json",
+            "X-CLI-Auth-Provider": provider_id
+        }
+        
         response = None
         max_retries = 3
         for attempt in range(max_retries):
@@ -124,7 +130,7 @@ async def chat_completions(
                 "POST",
                 "v1/chat/completions",
                 json_body=payload,
-                headers={"content-type": "application/json"},
+                headers=headers,
             )
             
             # Check for authentication errors that warrant a retry with a different session
