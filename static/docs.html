@@ -190,6 +190,19 @@
 
         .header-actions { display: flex; align-items: center; gap: 8px; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+        .model-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .model-tag { 
+            padding: 4px 10px; 
+            background: var(--bg); 
+            border: 1px solid var(--border); 
+            border-radius: 6px; 
+            font-size: 0.75rem; 
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .model-tag:hover { border-color: var(--accent); color: var(--text); background: var(--surface-hover); }
     </style>
 </head>
 
@@ -279,9 +292,11 @@
             <div style="display:flex;gap:8px;margin-bottom:16px;">
                 <button class="btn btn-primary" onclick="runCurlTest()">Run Test</button>
                 <button class="btn btn-secondary" onclick="copyCurl()">Copy CURL</button>
+                <button class="btn btn-secondary" onclick="fetchModels()">Fetch Models</button>
             </div>
             <div id="test-status" class="status-box"></div>
             <pre id="test-response" style="display:none;background:var(--bg);padding:12px;border:1px solid var(--border);border-radius:10px;font-family:monospace;font-size:0.8125rem;color:var(--text-secondary);white-space:pre-wrap;overflow-wrap:anywhere;max-height:200px;overflow:auto;"></pre>
+            <div id="models-list" class="model-tags"></div>
         </div>
     </div>
 
@@ -473,6 +488,39 @@
                 status.textContent = 'Request failed: ' + e.message;
                 status.style.color = 'var(--error)';
             }
+        }
+
+        async function fetchModels() {
+            const list = document.getElementById('models-list');
+            list.innerHTML = '<span style="font-size:0.75rem;color:var(--text-secondary);">Fetching...</span>';
+            try {
+                const res = await fetch('/cli/models');
+                const data = await readJson(res);
+                const models = data.models || data.aliases || [];
+                if (!models.length) {
+                    list.innerHTML = '<span style="font-size:0.75rem;color:var(--text-secondary);">No models found</span>';
+                    return;
+                }
+                list.innerHTML = models.map(m => `
+                    <div class="model-tag" onclick="selectModel('${m.id || m.model}')">${m.id || m.model}</div>
+                `).join('');
+            } catch (e) {
+                list.innerHTML = `<span style="font-size:0.75rem;color:var(--error);">${e.message}</span>`;
+            }
+        }
+
+        function selectModel(id) {
+            const textarea = document.getElementById('curl-example');
+            let content = textarea.value;
+            // replace the model in the JSON body
+            try {
+                const match = content.match(/"model":\s*"[^"]*"/);
+                if (match) {
+                    content = content.replace(/"model":\s*"[^"]*"/, `"model": "${id}"`);
+                    textarea.value = content;
+                    setAuthStatus(`Model set to ${id}`);
+                }
+            } catch (e) {}
         }
 
         document.addEventListener('DOMContentLoaded', () => {
