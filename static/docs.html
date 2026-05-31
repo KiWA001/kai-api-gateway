@@ -263,14 +263,20 @@
         </div>
 
         <div class="card">
-            <div class="card-header"><div><div class="card-title">API Keys</div><div class="card-subtitle">Manage your access tokens</div></div></div>
-            <div class="table-container">
-                <table>
-                    <thead><tr><th>Name</th><th>Token</th><th>Usage</th><th>Created</th><th>Action</th></tr></thead>
-                    <tbody id="keys-list"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-secondary);">Loading keys...</td></tr></tbody>
-                </table>
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Test API</div>
+                    <div class="card-subtitle">Test your connection using a CURL example</div>
+                </div>
             </div>
-            <button class="btn btn-primary" style="margin-top:16px;" onclick="createKey()">Create Key</button>
+            <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:8px;">CURL EXAMPLE</div>
+            <pre id="curl-example" style="background:var(--bg);padding:12px;border:1px solid var(--border);border-radius:10px;font-family:monospace;font-size:0.8125rem;color:#c4b5fd;white-space:pre-wrap;overflow-wrap:anywhere;margin-bottom:16px;"></pre>
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <button class="btn btn-primary" onclick="runCurlTest()">Run Test</button>
+                <button class="btn btn-secondary" onclick="copyCurl()">Copy CURL</button>
+            </div>
+            <div id="test-status" class="status-box"></div>
+            <pre id="test-response" style="display:none;background:var(--bg);padding:12px;border:1px solid var(--border);border-radius:10px;font-family:monospace;font-size:0.8125rem;color:var(--text-secondary);white-space:pre-wrap;overflow-wrap:anywhere;max-height:200px;overflow:auto;"></pre>
         </div>
     </div>
 
@@ -403,37 +409,59 @@
             } catch (e) { setAuthStatus(e.message, true); }
         }
 
-        async function loadKeys() {
-            const tbody = document.getElementById('keys-list');
+        function renderCurl() {
+            const host = window.location.origin || 'https://kiwa001-kai-api-gateway-cli.hf.space';
+            const model = Object.keys(authStates).length > 0 ? `${activeProvider}-gpt-4o` : 'codex-gpt-4o';
+            const curl = `curl ${host}/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${model}",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'`;
+            document.getElementById('curl-example').textContent = curl;
+        }
+
+        async function copyCurl() {
+            const curl = document.getElementById('curl-example').textContent;
+            await navigator.clipboard.writeText(curl);
+            setAuthStatus('CURL command copied');
+        }
+
+        async function runCurlTest() {
+            const status = document.getElementById('test-status');
+            const resBox = document.getElementById('test-response');
+            status.style.display = 'block';
+            status.textContent = 'Running test...';
+            status.style.color = 'var(--text-secondary)';
+            resBox.style.display = 'none';
+
             try {
-                const res = await fetch('/qaz/keys');
-                const keys = await readJson(res);
-                tbody.innerHTML = keys.map(k => `
-                    <tr>
-                        <td>${k.name}</td>
-                        <td style="font-family:monospace;font-size:0.75rem;">${k.token.substring(0, 12)}...</td>
-                        <td>${Math.round((k.usage_tokens / k.limit_tokens) * 100)}%</td>
-                        <td style="font-size:0.75rem;">${new Date(k.created_at).toLocaleDateString()}</td>
-                        <td><button class="btn btn-danger" style="padding:4px 8px;font-size:0.7rem;" onclick="revokeKey('${k.id}')">Revoke</button></td>
-                    </tr>
-                `).join('');
-            } catch (e) { tbody.innerHTML = `<tr><td colspan="5">${e.message}</td></tr>`; }
+                const model = Object.keys(authStates).length > 0 ? `${activeProvider}-gpt-4o` : 'codex-gpt-4o';
+                const res = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: 'Say hello in one word.' }]
+                    })
+                });
+                const data = await readJson(res);
+                if (!res.ok) throw new Error(data.detail || data.error?.message || JSON.stringify(data));
+                
+                status.textContent = 'Test successful!';
+                status.style.color = 'var(--success)';
+                resBox.style.display = 'block';
+                resBox.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                status.textContent = 'Test failed: ' + e.message;
+                status.style.color = 'var(--error)';
+            }
         }
-
-        async function createKey() {
-            const name = prompt('Key Name:'); if (!name) return;
-            const res = await fetch('/qaz/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, limit_tokens: 1000000 }) });
-            const data = await readJson(res);
-            alert('New Key: ' + data.token);
-            loadKeys();
-        }
-
-        async function revokeKey(id) { if (confirm('Delete?')) { await fetch(`/qaz/keys/${id}`, { method: 'DELETE' }); loadKeys(); } }
 
         document.addEventListener('DOMContentLoaded', () => {
             initProviderGrid();
             loadCliAuthFiles();
-            loadKeys();
+            renderCurl();
         });
     </script>
 </body>
