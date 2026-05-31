@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,8 @@ CLI_PROXY_MANAGEMENT_KEY = os.getenv(
     "sk-kai-cli-management",
 )
 CLI_PROXY_TIMEOUT = float(os.getenv("KAI_CLI_PROXY_TIMEOUT", "120"))
+CLI_PROXY_AUTH_DIR = Path(os.getenv("KAI_CLI_PROXY_AUTH_DIR", "/tmp/cliproxy/auths"))
+OAUTH_SESSION_TABLE = os.getenv("KAI_OAUTH_SESSION_TABLE", "kaiapi_oauth_auth_files")
 
 CLI_PROXY_MODEL_CATALOG = Path(__file__).parent / "CLIProxyAPI-main" / "internal" / "registry" / "models" / "models.json"
 
@@ -356,3 +359,116 @@ def flattened_static_cli_models() -> list[dict[str, Any]]:
                 }
             )
     return rows
+
+
+def _oauth_supabase_client():
+    from config import SUPABASE_KEY, SUPABASE_SERVICE_KEY, SUPABASE_URL
+
+    url = os.getenv("OAUTH_SUPABASE_URL") or os.getenv("SUPABASE_URL") or SUPABASE_URL
+    key = (
+        os.getenv("OAUTH_SUPABASE_SERVICE_KEY")
+        or os.getenv("SUPABASE_SERVICE_KEY")
+        or os.getenv("SUPABASE_KEY")
+        or SUPABASE_SERVICE_KEY
+        or SUPABASE_KEY
+    )
+    if not url or not key:
+        return None
+    try:
+        from supabase import create_client
+
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
+def _infer_auth_provider(relative_path: str, content: Any) -> str:
+    text = relative_path.lower()
+    if isinstance(content, dict):
+        for key in ("provider", "type", "issuer", "account_type"):
+            value = str(content.get(key, "")).lower()
+            if value:
+                text += " " + value
+    if "antigravity" in text:
+        return "antigravity"
+    if "codex" in text or "openai" in text:
+        return "codex"
+    if "gemini" in text:
+        return "gemini"
+    if "anthropic" in text or "claude" in text:
+        return "claude"
+    if "xai" in text or "grok" in text:
+        return "xai"
+    if "kimi" in text:
+        return "kimi"
+    return "unknown"
+
+
+def sync_cli_auth_files_to_supabase() -> dict[str, Any]:
+    client = _oauth_supabase_client()
+    if not client:
+        return {"status": "skipped", "reason": "Supabase OAuth backup credentials are not configured."}
+    if not CLI_PROXY_AUTH_DIR.exists():
+        return {"status": "ok", "synced": 0, "reason": "Auth directory does not exist yet."}
+
+    rows = []
+    for path in CLI_PROXY_AUTH_DIR.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            content_text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        except Exception:
+            continue
+
+        try:
+            content_json = json.loads(content_text)
+        except Exception:
+            content_json = None
+
+        relative_path = path.relative_to(CLI_PROXY_AUTH_DIR).as_posix()
+        stat = path.stat()
+        rows.append(
+            {
+                "path": relative_path,
+                "provider": _infer_auth_provider(relative_path, content_json),
+                "content": content_json,
+                "content_text": content_text,
+                "size_bytes": stat.st_size,
+                "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                "synced_at": datetime.now(timezone.utc).isoformat(),
+                "is_active": True,
+            }
+        )
+
+    if rows:
+        client.table(OAUTH_SESSION_TABLE).upsert(rows, on_conflict="path").execute()
+    return {"status": "ok", "synced": len(rows)}
+
+
+def restore_cli_auth_files_from_supabase() -> dict[str, Any]:
+    client = _oauth_supabase_client()
+    if not client:
+        return {"status": "skipped", "reason": "Supabase OAuth backup credentials are not configured."}
+
+    result = (
+        client.table(OAUTH_SESSION_TABLE)
+        .select("path,content_text")
+        .eq("is_active", True)
+        .execute()
+    )
+    rows = result.data or []
+    restored = 0
+    CLI_PROXY_AUTH_DIR.mkdir(parents=True, exist_ok=True)
+
+    for row in rows:
+        relative = Path(str(row.get("path", "")))
+        if relative.is_absolute() or ".." in relative.parts or not row.get("content_text"):
+            continue
+        destination = CLI_PROXY_AUTH_DIR / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(row["content_text"], encoding="utf-8")
+        restored += 1
+
+    return {"status": "ok", "restored": restored}

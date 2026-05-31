@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Superbase Alive</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      color: #111;
+      font-family: Arial, sans-serif;
+    }
+    main {
+      width: min(92vw, 520px);
+      display: grid;
+      gap: 10px;
+    }
+    button, input, textarea {
+      width: 100%;
+      font: inherit;
+      padding: 12px;
+      border: 1px solid #bbb;
+      border-radius: 0;
+      background: #fff;
+      color: #111;
+    }
+    button {
+      cursor: pointer;
+      background: #111;
+      color: #fff;
+      border-color: #111;
+    }
+    #manual {
+      display: none;
+      gap: 8px;
+    }
+    #status, #log {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <button id="ping">ping</button>
+    <button id="manual-toggle">manual ping</button>
+    <div id="manual">
+      <input id="manual-name" placeholder="name">
+      <input id="manual-url" placeholder="supabase url">
+      <textarea id="manual-key" rows="4" placeholder="anon key"></textarea>
+      <button id="manual-add">add</button>
+    </div>
+    <div id="status">0 / 0</div>
+    <div id="log"></div>
+  </main>
+
+  <script src="./projects.js"></script>
+  <script>
+    const pingButton = document.getElementById('ping');
+    const manualToggle = document.getElementById('manual-toggle');
+    const manualBox = document.getElementById('manual');
+    const manualAdd = document.getElementById('manual-add');
+    const statusBox = document.getElementById('status');
+    const logBox = document.getElementById('log');
+
+    function savedProjects() {
+      try {
+        return JSON.parse(localStorage.getItem('superbase_alive_projects') || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function allProjects() {
+      return [...HARDCODED_PROJECTS, ...savedProjects()];
+    }
+
+    function normalizeUrl(url) {
+      return String(url || '').trim().replace(/\/+$/, '');
+    }
+
+    async function pingProject(project) {
+      const endpoint = `${normalizeUrl(project.url)}/rest/v1/keepalive?select=id&limit=1`;
+      const response = await fetch(endpoint, {
+        headers: {
+          apikey: project.anonKey,
+          Authorization: `Bearer ${project.anonKey}`
+        }
+      });
+      const text = await response.text();
+      if (!response.ok) throw new Error(`${response.status} ${text.slice(0, 160)}`);
+      return text;
+    }
+
+    async function pingAll() {
+      const projects = allProjects();
+      logBox.textContent = '';
+      statusBox.textContent = `0 / ${projects.length}`;
+      pingButton.disabled = true;
+      for (let i = 0; i < projects.length; i += 1) {
+        const project = projects[i];
+        statusBox.textContent = `${i + 1} / ${projects.length}`;
+        try {
+          await pingProject(project);
+          logBox.textContent += `${project.name || project.url}: ok\n`;
+        } catch (error) {
+          logBox.textContent += `${project.name || project.url}: ${error.message}\n`;
+        }
+      }
+      pingButton.disabled = false;
+    }
+
+    manualToggle.addEventListener('click', () => {
+      manualBox.style.display = manualBox.style.display === 'grid' ? 'none' : 'grid';
+    });
+
+    manualAdd.addEventListener('click', () => {
+      const project = {
+        name: document.getElementById('manual-name').value.trim() || 'Manual Project',
+        url: document.getElementById('manual-url').value.trim(),
+        anonKey: document.getElementById('manual-key').value.trim()
+      };
+      if (!project.url || !project.anonKey) {
+        logBox.textContent = 'Add a Supabase URL and anon key.';
+        return;
+      }
+      const projects = savedProjects();
+      projects.push(project);
+      localStorage.setItem('superbase_alive_projects', JSON.stringify(projects));
+      statusBox.textContent = `0 / ${allProjects().length}`;
+      logBox.textContent = 'Added.';
+    });
+
+    pingButton.addEventListener('click', pingAll);
+    statusBox.textContent = `0 / ${allProjects().length}`;
+  </script>
+</body>
+</html>

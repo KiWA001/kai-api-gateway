@@ -53,10 +53,14 @@ API_TITLE = "K-AI API"
 API_DESCRIPTION = "CLIProxy OAuth API gateway."
 API_VERSION = "3.0.0"
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ixktspjwtzhpcpedfjij.supabase.co")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yhwbptwegrmynoaedjou.supabase.co")
 SUPABASE_KEY = os.getenv(
     "SUPABASE_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4a3RzcGp3dHpocGNwZWRmamlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NjA1OTgsImV4cCI6MjA4MzMzNjU5OH0.YllBhJl5XEClqjyJe9Il6rrejNP3Xom9Uy6XhlDNMmU",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlod2JwdHdlZ3JteW5vYWVkam91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzU1MTYsImV4cCI6MjA5NTgxMTUxNn0.DUIjbAmfwbzMGCQ04dk2ZLYm-by40ApcSdiduQvEXaA",
+)
+SUPABASE_SERVICE_KEY = os.getenv(
+    "SUPABASE_SERVICE_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlod2JwdHdlZ3JteW5vYWVkam91Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDIzNTUxNiwiZXhwIjoyMDk1ODExNTE2fQ.i-r0tMl0PSAM_4_9tZBI1Apo_8Mf3_t9nmxHQlsN8Qw",
 )
 
 ENABLE_CLI_PROXY = os.getenv("KAI_CLI_PROXY_ENABLED", "true").lower() in {

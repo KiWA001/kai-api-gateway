@@ -6,7 +6,7 @@ Shared authentication logic for dashboard vs external API access.
 
 from fastapi import HTTPException, Request, Header
 from typing import Optional
-from db import get_supabase
+from auth_cache import get_cached_api_key
 from config import DEMO_API_KEY
 
 # List of allowed origins/paths that don't need API key (dashboard access)
@@ -75,36 +75,22 @@ async def verify_api_key(
     if token == DEMO_API_KEY:
         return {"id": "demo", "name": "Demo User", "limit_tokens": -1, "is_dashboard": False}
 
-    # 2. Check Database (Non-blocking)
-    import asyncio
-    loop = asyncio.get_event_loop()
-    
-    def _sync_check():
-        supabase = get_supabase()
-        if not supabase:
-             raise HTTPException(status_code=503, detail="Service unavailable")
-             
-        res = supabase.table("kaiapi_api_keys").select("*").eq("token", token).execute()
-        if not res.data:
-            return None
-        return res.data[0]
-
     try:
-        key_data = await loop.run_in_executor(None, _sync_check)
-        
+        key_data = get_cached_api_key(token)
+
         if not key_data:
              raise HTTPException(status_code=401, detail="Incorrect API key provided")
-        
+
         if not key_data.get("is_active", True):
             raise HTTPException(status_code=403, detail="API Key is inactive")
-            
+
         # Check limits
         current_usage = key_data.get("usage_tokens", 0)
         limit = key_data.get("limit_tokens", 0)
-        
+
         if limit > 0 and current_usage >= limit:
              raise HTTPException(status_code=429, detail="You have exceeded your current quota")
-             
+
         key_data["is_dashboard"] = False
         return key_data
 

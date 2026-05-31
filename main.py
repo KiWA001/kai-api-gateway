@@ -14,6 +14,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from admin_router import router as admin_router
+from auth_cache import refresh_api_key_cache
+from cli_proxy import restore_cli_auth_files_from_supabase
 from cli_proxy_router import router as cli_proxy_router
 from config import API_DESCRIPTION, API_TITLE, API_VERSION, CORS_HEADERS, CORS_METHODS, CORS_ORIGINS
 from error_handling import openai_error
@@ -48,6 +50,21 @@ app.add_middleware(
 app.include_router(v1_router)
 app.include_router(cli_proxy_router)
 app.include_router(admin_router)
+
+
+@app.on_event("startup")
+async def restore_oauth_sessions_on_startup():
+    try:
+        key_result = refresh_api_key_cache()
+        logger.info("API key cache: %s", key_result)
+    except Exception as exc:
+        logger.warning("API key cache load failed: %s", exc)
+
+    try:
+        result = restore_cli_auth_files_from_supabase()
+        logger.info("OAuth session restore: %s", result)
+    except Exception as exc:
+        logger.warning("OAuth session restore failed: %s", exc)
 
 
 @app.exception_handler(HTTPException)

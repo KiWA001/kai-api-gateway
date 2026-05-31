@@ -1,12 +1,13 @@
 import logging
 from supabase import create_client, Client
-from config import SUPABASE_URL, SUPABASE_KEY
+from config import SUPABASE_URL, SUPABASE_KEY, SUPABASE_SERVICE_KEY
 
 logger = logging.getLogger("kai_api.db")
 
 try:
-    if SUPABASE_URL and SUPABASE_KEY:
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    supabase_server_key = SUPABASE_SERVICE_KEY or SUPABASE_KEY
+    if SUPABASE_URL and supabase_server_key:
+        supabase: Client = create_client(SUPABASE_URL, supabase_server_key)
         logger.info("✅ Supabase client initialized")
     else:
         supabase = None

@@ -17,6 +17,8 @@ from cli_proxy import (
     cli_management_request,
     get_enabled_cli_models,
     is_cli_model_enabled,
+    restore_cli_auth_files_from_supabase,
+    sync_cli_auth_files_to_supabase,
 )
 
 
@@ -115,7 +117,8 @@ async def submit_cli_auth_callback(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"CLI proxy callback failed: {exc}") from exc
 
-    return {"status": "submitted", "provider": provider_id, "result": payload}
+    backup = sync_cli_auth_files_to_supabase()
+    return {"status": "submitted", "provider": provider_id, "result": payload, "backup": backup}
 
 
 @router.get("/auth/{provider}/status")
@@ -142,9 +145,23 @@ async def get_cli_auth_status(
 @router.get("/auth/files")
 async def list_cli_auth_files(_: dict = Depends(verify_api_key)):
     try:
-        return await cli_management_request("GET", "auth-files")
+        payload = await cli_management_request("GET", "auth-files")
+        backup = sync_cli_auth_files_to_supabase()
+        if isinstance(payload, dict):
+            payload["backup"] = backup
+        return payload
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"CLI proxy auth file list failed: {exc}") from exc
+
+
+@router.post("/auth/sync")
+async def sync_cli_auth_files(_: dict = Depends(verify_api_key)):
+    return sync_cli_auth_files_to_supabase()
+
+
+@router.post("/auth/restore")
+async def restore_cli_auth_files(_: dict = Depends(verify_api_key)):
+    return restore_cli_auth_files_from_supabase()
 
 
 @router.get("/models")

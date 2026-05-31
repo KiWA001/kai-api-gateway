@@ -6,7 +6,9 @@ import time
 import uuid
 
 from auth import verify_api_key
+from auth_cache import increment_cached_usage
 from db import get_supabase
+from local_db import increment_usage as local_increment_usage
 from services import engine
 from utils import calculate_usage
 from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, is_cli_model_enabled, resolve_cli_model
@@ -71,6 +73,7 @@ def update_usage_stats(key_id: str, tokens: int):
     """Increment token usage in DB."""
     if key_id == "demo" or key_id == "dashboard":
         return # Don't track demo/dashboard usage
+    increment_cached_usage(key_id, tokens)
         
     supabase = get_supabase()
     if supabase and tokens > 0:
@@ -82,6 +85,9 @@ def update_usage_stats(key_id: str, tokens: int):
                 
         except Exception as e:
             print(f"Failed to update usage for {key_id}: {e}")
+            local_increment_usage(key_id, tokens)
+    else:
+        local_increment_usage(key_id, tokens)
 
 # --- Endpoint ---
 
