@@ -905,12 +905,25 @@ func (h *BaseAPIHandler) getRequestDetailsWithOptions(modelName string, allowIma
 		}
 	}
 
-	// Dynamic fix: strip provider prefix (e.g., "codex:gpt-4o" -> "gpt-4o")
-	// This ensures that the normalized model name sent to the provider executor is clean.
-	if idx := strings.Index(resolvedModelName, ":"); idx > 0 {
-		resolvedModelName = resolvedModelName[idx+1:]
-	} else if idx := strings.Index(resolvedModelName, "/"); idx > 0 {
-		resolvedModelName = resolvedModelName[idx+1:]
+	// Dynamic routing: if the model is "provider:model" or "provider/model",
+	// extract the provider directly and bypass the registry lookup entirely.
+	// This allows any model to be routed to a known provider without it being
+	// pre-registered in the sidecar's model catalog.
+	for _, sep := range []string{":", "/"} {
+		if idx := strings.Index(resolvedModelName, sep); idx > 0 {
+			extractedProvider := strings.ToLower(resolvedModelName[:idx])
+			cleanModel := resolvedModelName[idx+1:]
+			if cleanModel == "" {
+				break
+			}
+			if strings.EqualFold(routeModelBaseName(cleanModel), "gpt-image-2") && !allowImageModel {
+				return nil, "", &interfaces.ErrorMessage{
+					StatusCode: http.StatusServiceUnavailable,
+					Error:      fmt.Errorf("model %s is only supported on /v1/images/generations and /v1/images/edits", cleanModel),
+				}
+			}
+			return []string{extractedProvider}, cleanModel, nil
+		}
 	}
 
 	parsed := thinking.ParseSuffix(resolvedModelName)
@@ -928,11 +941,6 @@ func (h *BaseAPIHandler) getRequestDetailsWithOptions(modelName string, allowIma
 	}
 
 	providers = util.GetProviderName(baseModel)
-	// Fallback: if baseModel has no provider but differs from resolvedModelName,
-	// try using the full model name. This handles edge cases where custom models
-	// may be registered with their full suffixed name (e.g., "my-model(8192)").
-	// Evaluated in Story 11.8: This fallback is intentionally preserved to support
-	// custom model registrations that include thinking suffixes.
 	if len(providers) == 0 && baseModel != resolvedModelName {
 		providers = util.GetProviderName(resolvedModelName)
 	}
@@ -941,8 +949,6 @@ func (h *BaseAPIHandler) getRequestDetailsWithOptions(modelName string, allowIma
 		return nil, "", &interfaces.ErrorMessage{StatusCode: http.StatusBadGateway, Error: fmt.Errorf("unknown provider for model %s", modelName)}
 	}
 
-	// The thinking suffix is preserved in the model name itself, so no
-	// metadata-based configuration passing is needed.
 	return providers, resolvedModelName, nil
 }
 
