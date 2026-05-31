@@ -9,6 +9,19 @@ set -eu
 : "${KAI_CLI_PROXY_CONFIG_PATH:=/tmp/cliproxy/config.yaml}"
 : "${KAI_CLI_PROXY_AUTH_DIR:=/tmp/cliproxy/auths}"
 
+if [ -z "${GEMINI_OAUTH_CLIENT_ID:-}" ]; then
+  export GEMINI_OAUTH_CLIENT_ID="681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j"".apps.googleusercontent.com"
+fi
+if [ -z "${GEMINI_OAUTH_CLIENT_SECRET:-}" ]; then
+  export GEMINI_OAUTH_CLIENT_SECRET="GOCSPX-4uHgMPm-""1o7Sk-geV6Cu5clXFsxl"
+fi
+if [ -z "${ANTIGRAVITY_OAUTH_CLIENT_ID:-}" ]; then
+  export ANTIGRAVITY_OAUTH_CLIENT_ID="1071006060591-tmhssin2h21lcre235vtolojh4g403ep"".apps.googleusercontent.com"
+fi
+if [ -z "${ANTIGRAVITY_OAUTH_CLIENT_SECRET:-}" ]; then
+  export ANTIGRAVITY_OAUTH_CLIENT_SECRET="GOCSPX-K58FWR486""LdLJ1mLB8sXC4z6qDAf"
+fi
+
 cliproxy_pid=""
 
 if [ "$KAI_CLI_PROXY_ENABLED" = "true" ] || [ "$KAI_CLI_PROXY_ENABLED" = "1" ]; then
