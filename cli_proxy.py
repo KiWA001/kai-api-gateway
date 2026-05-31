@@ -72,6 +72,7 @@ AUTH_PROVIDERS: dict[str, dict[str, str]] = {
 AUTH_PROVIDER_ALIASES = {
     "openai": "codex",
     "anthropic": "claude",
+    "claude-code": "claude",
     "google": "gemini",
     "anti-gravity": "antigravity",
     "grok": "xai",
@@ -162,6 +163,22 @@ DEFAULT_ENABLED_CLI_MODELS = list(PUBLIC_CLI_MODEL_ALIASES.keys())
 LOCAL_SETTINGS_PATH = Path(os.getenv("KAI_LOCAL_SETTINGS_PATH", "/tmp/kai-api-settings.json"))
 
 
+def cli_model_provider(model: str) -> str:
+    if model.startswith("antigravity-") or model.startswith("anti-gravity-"):
+        return "antigravity"
+    if model.startswith("codex-"):
+        return "codex"
+    if model.startswith("gemini-"):
+        return "gemini"
+    if model.startswith("claude-"):
+        return "claude"
+    if model.startswith("xai-"):
+        return "xai"
+    if model.startswith("kimi-"):
+        return "kimi"
+    return "cli"
+
+
 def canonical_auth_provider(provider: str) -> str:
     normalized = provider.strip().lower()
     normalized = AUTH_PROVIDER_ALIASES.get(normalized, normalized)
@@ -215,6 +232,38 @@ async def cli_management_request(
     return payload
 
 
+async def disable_cli_auth_session(auth_id: str) -> bool:
+    """Disable a specific CLI auth session via the management API."""
+    if not CLI_PROXY_ENABLED:
+        return False
+    try:
+        await cli_management_request(
+            "PATCH",
+            "auth-files/status",
+            json_body={"name": auth_id, "disabled": True},
+        )
+        return True
+    except Exception as e:
+        print(f"Failed to disable auth session {auth_id}: {e}")
+        return False
+
+
+async def enable_cli_auth_session(auth_id: str) -> bool:
+    """Enable a specific CLI auth session via the management API."""
+    if not CLI_PROXY_ENABLED:
+        return False
+    try:
+        await cli_management_request(
+            "PATCH",
+            "auth-files/status",
+            json_body={"name": auth_id, "disabled": False},
+        )
+        return True
+    except Exception as e:
+        print(f"Failed to enable auth session {auth_id}: {e}")
+        return False
+
+
 async def cli_api_request(
     method: str,
     path: str,
@@ -248,11 +297,30 @@ async def cli_api_request(
 def resolve_cli_model(model: str | None) -> str:
     if not model:
         return PUBLIC_CLI_MODEL_ALIASES[DEFAULT_ENABLED_CLI_MODELS[0]]
-    return CLI_MODEL_ALIASES.get(model, model)
+    
+    # Check aliases first for backward compatibility and specific mappings
+    if model in CLI_MODEL_ALIASES:
+        return CLI_MODEL_ALIASES[model]
+    
+    # Handle dynamic prefixes: strip the provider prefix if present
+    prefixes = [
+        "antigravity-", "anti-gravity-", "codex-", 
+        "gemini-", "claude-", "xai-", "kimi-"
+    ]
+    for prefix in prefixes:
+        if model.startswith(prefix):
+            return model[len(prefix):]
+            
+    return model
 
 
 def get_cli_provider_models() -> list[str]:
     return list(PUBLIC_CLI_MODEL_ALIASES.keys())
+
+
+def models_for_auth_providers(providers: set[str] | list[str]) -> list[str]:
+    active = {AUTH_PROVIDER_ALIASES.get(str(provider).strip().lower(), str(provider).strip().lower()) for provider in providers}
+    return [model for model in PUBLIC_CLI_MODEL_ALIASES if cli_model_provider(model) in active]
 
 
 def _read_local_settings() -> dict[str, Any]:
@@ -292,6 +360,93 @@ def get_enabled_cli_models() -> list[str]:
     return DEFAULT_ENABLED_CLI_MODELS.copy()
 
 
+def _auth_file_values(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
+        return []
+    for key in ("files", "auth_files", "data", "items"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _auth_file_provider(file: dict[str, Any]) -> str | None:
+    haystack = " ".join(
+        str(file.get(key, ""))
+        for key in ("provider", "auth_provider", "type", "label", "name", "path", "id")
+    ).lower()
+    if "antigravity" in haystack or "anti-gravity" in haystack:
+        return "antigravity"
+    if "codex" in haystack or "openai" in haystack:
+        return "codex"
+    if "gemini" in haystack:
+        return "gemini"
+    if "anthropic" in haystack or "claude" in haystack:
+        return "claude"
+    if "xai" in haystack or "grok" in haystack:
+        return "xai"
+    if "kimi" in haystack:
+        return "kimi"
+    return None
+
+
+def _auth_file_ready(file: dict[str, Any]) -> bool:
+    if file.get("disabled") or file.get("unavailable"):
+        return False
+    status = str(file.get("status", "")).strip().lower()
+    if any(term in status for term in ("disabled", "expired", "invalid", "unauthorized", "error", "failed")):
+        return False
+    cooldown = _parse_datetime(
+        file.get("next_retry_after")
+        or file.get("nextRetryAfter")
+        or file.get("next_retry")
+        or (file.get("quota") or {}).get("next_recover_at")
+    )
+    if cooldown and cooldown > datetime.now(timezone.utc):
+        return False
+    return True
+
+
+async def get_active_cli_auth_providers() -> set[str]:
+    try:
+        payload = await cli_management_request("GET", "auth-files")
+    except Exception:
+        return set()
+    providers: set[str] = set()
+    for file in _auth_file_values(payload):
+        provider = _auth_file_provider(file)
+        if provider and _auth_file_ready(file):
+            providers.add(provider)
+    return providers
+
+
+async def get_runtime_enabled_cli_models() -> list[str]:
+    active_models = set(models_for_auth_providers(await get_active_cli_auth_providers()))
+    if not active_models:
+        return []
+    selected = get_enabled_cli_models()
+    return [model for model in selected if model in active_models]
+
+
 def set_enabled_cli_models(models: list[str]) -> list[str]:
     enabled = _normalize_enabled_models(models, default_if_missing=False)
     saved = False
@@ -317,6 +472,12 @@ def set_enabled_cli_models(models: list[str]) -> list[str]:
 def is_cli_model_enabled(model: str | None) -> bool:
     if not model or model == "auto":
         return True
+        
+    # If it uses a dynamic prefix, we allow it (as requested by the user)
+    prefixes = ["antigravity-", "codex-", "gemini-", "claude-", "xai-", "kimi-"]
+    if any(model.startswith(p) for p in prefixes):
+        return True
+
     public_name = model if model in PUBLIC_CLI_MODEL_ALIASES else None
     if not public_name:
         for alias, target in LEGACY_CLI_MODEL_ALIASES.items():

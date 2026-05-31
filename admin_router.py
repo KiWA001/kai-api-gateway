@@ -9,8 +9,13 @@ from pydantic import BaseModel
 from auth_cache import api_key_cache_status, refresh_api_key_cache
 from cli_proxy import (
     PUBLIC_CLI_MODEL_ALIASES,
+    cli_model_provider,
+    get_active_cli_auth_providers,
     get_enabled_cli_models,
     set_enabled_cli_models,
+    cli_management_request,
+    enable_cli_auth_session,
+    disable_cli_auth_session,
 )
 from db import get_supabase
 from local_db import (
@@ -45,6 +50,11 @@ class LookupKeyRequest(BaseModel):
 
 class ModelSelectionRequest(BaseModel):
     enabled_models: list[str]
+
+
+class SessionStatusRequest(BaseModel):
+    id: str
+    disabled: bool
 
 
 @router.get("/keys", response_model=list[APIKey])
@@ -174,17 +184,20 @@ async def lookup_key_by_token(req: LookupKeyRequest):
 @router.get("/models")
 async def list_model_settings():
     enabled = set(get_enabled_cli_models())
+    active_providers = await get_active_cli_auth_providers()
     return {
         "models": [
             {
                 "id": model,
                 "routes_to": target,
-                "provider": target.split("/", 1)[0],
+                "provider": cli_model_provider(model),
                 "enabled": model in enabled,
             }
             for model, target in PUBLIC_CLI_MODEL_ALIASES.items()
+            if cli_model_provider(model) in active_providers
         ],
-        "enabled_models": list(enabled),
+        "enabled_models": [model for model in enabled if cli_model_provider(model) in active_providers],
+        "active_providers": sorted(active_providers),
     }
 
 
@@ -205,3 +218,25 @@ async def refresh_key_cache():
         return refresh_api_key_cache()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/auth/sessions")
+async def list_auth_sessions():
+    """Proxy the auth-files management endpoint to list all connected sessions."""
+    try:
+        return await cli_management_request("GET", "auth-files")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/auth/sessions")
+async def toggle_auth_session(req: SessionStatusRequest):
+    """Toggle a specific CLI auth session enabled/disabled status."""
+    if req.disabled:
+        success = await disable_cli_auth_session(req.id)
+    else:
+        success = await enable_cli_auth_session(req.id)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to toggle session status")
+    return {"status": "ok", "id": req.id, "disabled": req.disabled}

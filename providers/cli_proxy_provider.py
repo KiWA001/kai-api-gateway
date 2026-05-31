@@ -59,3 +59,10 @@ class CLIProxyProvider(BaseProvider):
 
     def get_available_models(self) -> list[str]:
         return get_cli_provider_models()
+
+    async def health_check(self) -> bool:
+        try:
+            response = await cli_api_request("GET", "v1/models")
+            return response.status_code < 500
+        except Exception:
+            return False

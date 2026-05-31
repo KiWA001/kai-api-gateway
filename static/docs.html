@@ -77,12 +77,24 @@
     .model-list { display: grid; gap: 8px; }
     .model {
       display: flex;
+      align-items: center;
       justify-content: space-between;
       gap: 12px;
       padding: 10px 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #101015;
+    }
+    .model button {
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .test-output {
+      margin-top: 12px;
+      min-height: 24px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
     }
     .status { color: var(--ok); font-weight: 700; }
     .error { color: var(--bad); }
@@ -106,17 +118,21 @@
     <div class="grid">
       <section>
         <h2>Chat Completion</h2>
-        <pre>curl https://YOUR_HOST/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"model":"codex-gpt-5.5","messages":[{"role":"user","content":"Hello"}]}'</pre>
+        <pre id="chat-curl">Loading example...</pre>
+        <div id="test-output" class="test-output"></div>
+        <pre id="test-response" style="display:none;"></pre>
       </section>
 
       <section>
-        <h2>Health</h2>
-        <p id="health">Checking status...</p>
+        <h2>Current Host</h2>
+        <pre id="current-host"></pre>
       </section>
     </div>
+
+    <section>
+      <h2>Health</h2>
+      <p id="health">Checking status...</p>
+    </section>
 
     <section>
       <h2>Enabled Models</h2>
@@ -125,6 +141,27 @@
   </main>
 
   <script>
+    let firstModel = 'codex-gpt-5.5';
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]);
+    }
+
+    function renderCurl(model) {
+      const host = location.origin || 'https://kiwa001-kai-api-gateway-cli.hf.space';
+      document.getElementById('current-host').textContent = host;
+      document.getElementById('chat-curl').textContent = `curl ${host}/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"codex-gpt-5.5","messages":[{"role":"user","content":"Hello"}]}'</pre>
+      `.replace('"codex-gpt-5.5"', `"${model || firstModel}"`);
+    }
+
     async function loadHealth() {
       const node = document.getElementById('health');
       try {
@@ -136,20 +173,50 @@
       }
     }
 
+    async function testModel(model) {
+      const status = document.getElementById('test-output');
+      const responseBox = document.getElementById('test-response');
+      status.textContent = `Testing ${model}...`;
+      responseBox.style.display = 'none';
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: 'Reply with one short sentence.' }]
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || data.error?.message || JSON.stringify(data));
+        status.innerHTML = `<span class="status">${escapeHtml(model)} works.</span>`;
+        responseBox.style.display = 'block';
+        responseBox.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        status.innerHTML = `<span class="error">${escapeHtml(model)} failed: ${escapeHtml(error.message)}</span>`;
+      }
+    }
+
     async function loadModels() {
       const node = document.getElementById('models');
       try {
         const res = await fetch('/models');
         const data = await res.json();
         const models = data.models || [];
+        if (models[0]?.model) {
+          firstModel = models[0].model;
+        }
+        renderCurl(firstModel);
         node.innerHTML = models.length
-          ? models.map((item) => `<div class="model"><code>${item.model}</code><span>${item.provider}</span></div>`).join('')
-          : 'No enabled models yet.';
+          ? models.map((item) => `<div class="model"><code>${escapeHtml(item.model)}</code><span>${escapeHtml(item.provider)}</span><button onclick="testModel('${escapeHtml(item.model)}')">Test</button></div>`).join('')
+          : 'No ready OAuth models yet. Add or refresh an OAuth session in Admin.';
       } catch (error) {
         node.textContent = 'Models unavailable.';
+        renderCurl(firstModel);
       }
     }
 
+    renderCurl(firstModel);
     loadHealth();
     loadModels();
   </script>

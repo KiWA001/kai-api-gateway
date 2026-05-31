@@ -11,7 +11,7 @@ from db import get_supabase
 from local_db import increment_usage as local_increment_usage
 from services import engine
 from utils import calculate_usage
-from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, is_cli_model_enabled, resolve_cli_model
+from cli_proxy import CLI_MODEL_ALIASES, cli_api_request, is_cli_model_enabled, resolve_cli_model, disable_cli_auth_session
 from error_handling import (
     openai_error,
     error_invalid_api_key,
@@ -116,12 +116,45 @@ async def chat_completions(
         payload = request.model_dump()
         payload["model"] = resolve_cli_model(request.model)
         payload.pop("provider", None)
-        response = await cli_api_request(
-            "POST",
-            "v1/chat/completions",
-            json_body=payload,
-            headers={"content-type": "application/json"},
-        )
+        
+        response = None
+        max_retries = 3
+        for attempt in range(max_retries):
+            response = await cli_api_request(
+                "POST",
+                "v1/chat/completions",
+                json_body=payload,
+                headers={"content-type": "application/json"},
+            )
+            
+            # Check for authentication errors that warrant a retry with a different session
+            should_retry = False
+            try:
+                data = response.json()
+                error_obj = data.get("error", {})
+                error_msg = str(error_obj.get("message", "")).lower()
+                error_code = str(error_obj.get("code", "")).lower()
+                
+                # Detect common "invalidated token" or "auth unavailable" patterns
+                if response.status_code in {401, 403} or "invalidated" in error_msg or "auth_unavailable" in error_code:
+                    should_retry = True
+            except Exception:
+                if response.status_code in {401, 403}:
+                    should_retry = True
+
+            if should_retry:
+                auth_id = response.headers.get("X-CLI-Auth-ID")
+                if auth_id:
+                    print(f"Auth error detected for session {auth_id} (Attempt {attempt+1}/{max_retries}). Disabling session and retrying...")
+                    await disable_cli_auth_session(auth_id)
+                    continue
+            
+            # If we reached here, either it was successful or we can't automate a retry
+            break
+
+        if not response:
+            return error_server("CLI proxy request failed: No response received")
+
         try:
             data = response.json()
         except Exception:

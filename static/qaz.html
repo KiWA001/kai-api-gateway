@@ -549,10 +549,10 @@
 <body>
     <div class="app-container">
         <header class="app-header">
-            <div><h1>K-AI Admin</h1></div>
+            <div style="cursor:pointer;" onclick="location.href='/'"><h1>K-AI Admin</h1></div>
             <div class="header-actions">
-                <button class="btn btn-secondary" onclick="testAllAI()">Test</button>
-                <button class="btn btn-danger" onclick="clearStats()">Clear</button>
+                <span class="status-dot connected"></span>
+                <span style="font-size:0.875rem;color:var(--text-secondary);">Active</span>
             </div>
         </header>
 
@@ -576,22 +576,43 @@
         </div>
 
         <div class="card">
-            <div class="card-header"><div><div class="card-title">OAuth Login</div><div class="card-subtitle">Connect shared CLI provider sessions</div></div></div>
-            <div class="oauth-grid">
-                <div class="oauth-session-grid" id="oauth-session-list"></div>
-                <select id="cli-auth-provider" class="select-field" onchange="selectCliAuthProvider(this.value)"><option value="antigravity">Anti-Gravity</option><option value="codex">Codex / OpenAI</option><option value="gemini">Gemini CLI</option><option value="claude">Claude Code</option><option value="xai">xAI / Grok</option><option value="kimi">Kimi</option></select>
-                <div class="oauth-actions"><button class="btn btn-primary" onclick="startCliAuth()">Start Login</button><button class="btn btn-secondary" onclick="copyCliAuthUrl()">Copy Login URL</button><button class="btn btn-secondary" onclick="checkCliAuthStatus()">Check Status</button><button class="btn btn-secondary" onclick="loadCliAuthFiles()">Refresh Sessions</button></div>
-                <textarea id="cli-auth-url" class="input-field" rows="4" readonly placeholder="The login URL will appear here."></textarea>
-                <textarea id="cli-redirect-url" class="input-field" rows="4" placeholder="Paste the final redirect URL here after OAuth login."></textarea>
-                <div class="oauth-actions"><button class="btn btn-secondary" onclick="pasteCliRedirectUrl()">Paste Redirect URL</button><button class="btn btn-success" onclick="submitCliRedirect()">Submit Redirect URL</button></div>
-                <div id="cli-auth-status" class="status-box"></div><pre id="cli-auth-res" class="response-box"></pre><div id="cli-auth-files" class="oauth-session-grid"></div>
+            <div class="card-header"><div><div class="card-title">OAuth Sessions</div><div class="card-subtitle">Manage connected authentication sessions</div></div><button class="btn btn-secondary" onclick="loadCliAuthFiles()">Refresh</button></div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Active</th>
+                            <th>Provider</th>
+                            <th>Account</th>
+                            <th>Status/Cooldown</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cli-auth-sessions-table">
+                        <tr><td colspan="4" style="text-align:center;padding:20px;">Loading sessions...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header"><div><div class="card-title">Model Routing</div><div class="card-subtitle">Only checked models are exposed and usable</div></div><div class="oauth-actions"><button class="btn btn-secondary" onclick="loadModelSettings()">Refresh</button><button class="btn btn-primary" onclick="saveModelSettings()">Save Selection</button></div></div>
-            <div class="table-container"><table><thead><tr><th>Use</th><th>Model</th><th>OAuth</th><th>Routes To</th></tr></thead><tbody id="model-settings-list"><tr><td colspan="4" style="text-align:center;padding:20px;">Loading...</td></tr></tbody></table></div>
-            <div id="model-settings-status" class="status-box" style="margin-top:12px;"></div>
+            <div class="card-header"><div><div class="card-title">Add OAuth Session</div><div class="card-subtitle">Connect a new shared CLI provider session</div></div></div>
+            <div class="oauth-grid">
+                <div class="oauth-session-grid" id="oauth-session-list"></div>
+                <!-- Provider dropdown removed as requested -->
+                <div class="oauth-actions">
+                    <button class="btn btn-primary" onclick="startCliAuth()">Start Login</button>
+                    <button class="btn btn-secondary" onclick="copyCliAuthUrl()">Copy Login URL</button>
+                    <button class="btn btn-secondary" onclick="checkCliAuthStatus()">Check Status</button>
+                </div>
+                <textarea id="cli-auth-url" class="input-field" rows="4" readonly placeholder="The login URL will appear here."></textarea>
+                <textarea id="cli-redirect-url" class="input-field" rows="4" placeholder="Paste the final redirect URL here after OAuth login."></textarea>
+                <div class="oauth-actions">
+                    <button class="btn btn-secondary" onclick="pasteCliRedirectUrl()">Paste Redirect URL</button>
+                    <button class="btn btn-success" onclick="submitCliRedirect()">Submit Redirect URL</button>
+                </div>
+                <div id="cli-auth-status" class="status-box"></div>
+                <pre id="cli-auth-res" class="response-box"></pre>
+            </div>
         </div>
     </div>
 
@@ -607,7 +628,7 @@
         };
         let modelSettings = [];
 
-        document.addEventListener('DOMContentLoaded', () => { renderCliAuthSessions(); loadCliAuthFiles(); loadModelSettings(); });
+        document.addEventListener('DOMContentLoaded', () => { renderCliAuthSessions(); loadCliAuthFiles(); });
 
         async function readJsonResponse(response) {
             const text = await response.text();
@@ -677,7 +698,7 @@
         function showCliAuthResponse(data) { const box = document.getElementById('cli-auth-res'); box.style.display = 'block'; box.textContent = JSON.stringify(data, null, 2); }
 
         async function startCliAuth() {
-            cliAuthProvider = document.getElementById('cli-auth-provider').value;
+            const provider = cliAuthProvider;
             const session = currentCliSession(); session.status = 'Starting login'; renderCliAuthSessions(); setCliAuthStatus(session.label + ': starting login...');
             try {
                 const data = await readJsonResponse(await fetch('/cli/auth/' + cliAuthProvider + '/start', { method: 'POST', headers: { 'Content-Type': 'application/json' } }));
@@ -693,12 +714,62 @@
         function authFileProviderLabel(file) { const raw = String(file.provider || file.auth_provider || file.type || file.name || file.path || '').toLowerCase(); if (raw.includes('antigravity')) return 'Anti-Gravity'; if (raw.includes('codex') || raw.includes('openai')) return 'Codex / OpenAI'; if (raw.includes('gemini')) return 'Gemini CLI'; if (raw.includes('anthropic') || raw.includes('claude')) return 'Claude Code'; if (raw.includes('xai') || raw.includes('grok')) return 'xAI / Grok'; if (raw.includes('kimi')) return 'Kimi'; return file.provider || file.name || 'OAuth Session'; }
         function formatTime(value) { if (!value) return 'Unknown'; const date = new Date(value); return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString(); }
         function formatCooldown(file) { const next = file.next_retry_after || file.nextRetryAfter || file.next_retry || (file.quota && (file.quota.next_recover_at || file.quota.nextRecoverAt)); if (!next) return file.unavailable ? 'Unavailable' : 'Ready'; const date = new Date(next); if (Number.isNaN(date.getTime())) return String(next); const diff = date.getTime() - Date.now(); if (diff <= 0) return 'Ready'; return 'Cools down ' + date.toLocaleString(); }
-        async function loadCliAuthFiles() { const container = document.getElementById('cli-auth-files'); container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.875rem;">Loading saved OAuth sessions...</div>'; try { const files = normalizeAuthFilesPayload(await readJsonResponse(await fetch('/cli/auth/files'))); if (!files.length) { container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.875rem;">No saved OAuth sessions yet.</div>'; return; } container.innerHTML = files.map(file => { const label = authFileProviderLabel(file); const account = file.email || file.account || file.name || file.id || file.path || 'Connected session'; const lastUsed = file.last_used || file.lastUsed || file.last_request_at || file.lastRequestAt || file.last_refresh; return '<div class="oauth-session-card"><strong>' + label + '</strong><span>' + account + '</span><br><span>Last used: ' + formatTime(lastUsed) + '</span><br><span>' + formatCooldown(file) + '</span></div>'; }).join(''); } catch (e) { container.innerHTML = '<div style="color:var(--error);font-size:0.875rem;">' + e.message + '</div>'; } }
+        async function loadCliAuthFiles() {
+            const tbody = document.getElementById('cli-auth-sessions-table');
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-secondary);">Loading saved OAuth sessions...</td></tr>';
+            try {
+                const response = await fetch('/qaz/auth/sessions');
+                const data = await readJsonResponse(response);
+                const files = normalizeAuthFilesPayload(data);
+                
+                if (!files.length) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-secondary);">No saved OAuth sessions yet.</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = files.map(file => {
+                    const label = authFileProviderLabel(file);
+                    const account = file.email || file.account || file.name || file.id || file.path || 'Connected session';
+                    const cooldown = formatCooldown(file);
+                    const isDisabled = file.disabled || file.status === 'disabled';
+                    
+                    return `
+                        <tr>
+                            <td>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="toggle-${file.id}" ${!isDisabled ? 'checked' : ''} onchange="toggleSession('${file.id}', !this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </div>
+                            </td>
+                            <td><strong>${label}</strong></td>
+                            <td><span style="font-size:0.75rem;color:var(--text-secondary);">${account}</span></td>
+                            <td><span style="font-size:0.75rem;color:${isDisabled ? 'var(--error)' : 'var(--text-secondary)'};">${cooldown}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="4" style="color:var(--error);padding:20px;text-align:center;">' + e.message + '</td></tr>';
+            }
+        }
 
-        async function loadModelSettings() { const tbody = document.getElementById('model-settings-list'); tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;">Loading...</td></tr>'; try { const data = await readJsonResponse(await fetch('/qaz/models')); modelSettings = data.models || []; tbody.innerHTML = modelSettings.map(model => '<tr><td><input type="checkbox" data-model-id="' + model.id + '" ' + (model.enabled ? 'checked' : '') + '></td><td style="font-family:monospace;">' + model.id + '</td><td>' + model.provider + '</td><td style="font-family:monospace;color:var(--text-secondary);">' + model.routes_to + '</td></tr>').join(''); } catch (e) { tbody.innerHTML = '<tr><td colspan="4" style="color:var(--error);padding:20px;">' + e.message + '</td></tr>'; } }
-        async function saveModelSettings() { const checked = [...document.querySelectorAll('#model-settings-list input[type="checkbox"]:checked')].map(input => input.dataset.modelId); const status = document.getElementById('model-settings-status'); status.style.display = 'block'; status.style.color = 'var(--text-secondary)'; status.textContent = 'Saving model selection...'; try { const data = await readJsonResponse(await fetch('/qaz/models', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled_models: checked }) })); status.style.color = 'var(--success)'; status.textContent = data.enabled_models.length + ' model(s) enabled.'; loadModelSettings(); } catch (e) { status.style.color = 'var(--error)'; status.textContent = e.message; } }
-        async function testAllAI() { if (!confirm('Test all enabled CLI models?')) return; await fetch('/qaz/test_all', { method: 'POST' }); alert('Model test finished.'); }
-        async function clearStats() { if (!confirm('Clear all model stats?')) return; await fetch('/qaz/clear_stats', { method: 'POST' }); alert('Stats cleared.'); }
+        async function toggleSession(id, disabled) {
+            try {
+                await fetch('/qaz/auth/sessions', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, disabled })
+                });
+                setTimeout(loadCliAuthFiles, 300);
+            } catch (e) {
+                alert('Failed to toggle session: ' + e.message);
+                loadCliAuthFiles();
+            }
+        }
+
+        async function loadModelSettings() { /* Logic removed as requested */ }
+        async function saveModelSettings() { /* Logic removed as requested */ }
+        async function testAllAI() { /* Logic removed as requested */ }
+        async function clearStats() { /* Logic removed as requested */ }
     </script>
 </body>
 

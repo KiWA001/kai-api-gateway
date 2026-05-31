@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from admin_router import router as admin_router
 from auth_cache import refresh_api_key_cache
-from cli_proxy import restore_cli_auth_files_from_supabase
+from cli_proxy import get_runtime_enabled_cli_models, restore_cli_auth_files_from_supabase
 from cli_proxy_router import router as cli_proxy_router
 from config import API_DESCRIPTION, API_TITLE, API_VERSION, CORS_HEADERS, CORS_METHODS, CORS_ORIGINS
 from error_handling import openai_error
@@ -134,7 +134,8 @@ async def root():
 async def list_models():
     if not engine:
         return ModelsResponse(models=[], total=0)
-    models = engine.get_all_models()
+    active_models = await get_runtime_enabled_cli_models()
+    models = [ModelInfo(model=model, provider="cli") for model in active_models]
     return ModelsResponse(models=models, total=len(models))
 
 
@@ -175,5 +176,5 @@ async def health_check():
         for r in results
     ]
     healthy_count = sum(1 for p in providers if p.status == "healthy")
-    overall = "healthy" if healthy_count == len(providers) else "degraded" if healthy_count else "unhealthy"
+    overall = "healthy" if providers and healthy_count == len(providers) else "degraded" if healthy_count else "unhealthy"
     return HealthResponse(status=overall, providers=providers, timestamp=datetime.utcnow().isoformat() + "Z")

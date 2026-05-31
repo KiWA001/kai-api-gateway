@@ -13,7 +13,7 @@ import time
 from config import MODEL_RANKING, SUPABASE_KEY, SUPABASE_URL
 from models import ModelInfo
 from providers.cli_proxy_provider import CLIProxyProvider
-from cli_proxy import get_enabled_cli_models
+from cli_proxy import get_enabled_cli_models, get_runtime_enabled_cli_models
 
 logger = logging.getLogger("kai_api.engine")
 
@@ -131,7 +131,7 @@ class AIEngine:
 
     async def test_all_models(self) -> list[dict]:
         results = []
-        for model in get_enabled_cli_models():
+        for model in await get_runtime_enabled_cli_models():
             started = time.perf_counter()
             try:
                 await self._provider.send_message("Hi", model=model)
@@ -157,9 +157,9 @@ class AIEngine:
         provider: str = "auto",
         system_prompt: str | None = None,
     ) -> dict:
-        enabled_models = get_enabled_cli_models()
+        enabled_models = await get_runtime_enabled_cli_models()
         if not enabled_models:
-            raise ValueError("No CLI models are enabled.")
+            raise ValueError("No ready OAuth models are available. Add or refresh an OAuth session in the admin page.")
 
         requested = None if model in {None, "", "auto"} else model
         if requested and requested not in enabled_models:

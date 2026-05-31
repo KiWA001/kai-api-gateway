@@ -13,6 +13,8 @@ from cli_proxy import (
     PUBLIC_CLI_MODEL_ALIASES,
     canonical_auth_provider,
     cli_api_request,
+    cli_model_provider,
+    get_runtime_enabled_cli_models,
     cli_management_request,
     get_enabled_cli_models,
     is_cli_model_enabled,
@@ -149,11 +151,11 @@ async def restore_cli_auth_files(_: dict = Depends(verify_api_key)):
 
 @router.get("/models")
 async def list_cli_models(_: dict = Depends(verify_api_key)):
-    enabled_models = set(get_enabled_cli_models())
+    enabled_models = set(await get_runtime_enabled_cli_models())
     aliases = [
         {
             "id": alias,
-            "provider": "cli",
+            "provider": cli_model_provider(alias),
             "display_name": alias,
             "routes_to": target,
             "type": "alias",
