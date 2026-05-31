@@ -34,6 +34,14 @@ func GetProviderName(modelName string) []string {
 		return nil
 	}
 
+	// Dynamic fix: support explicit provider routing via prefix (e.g., "codex:gpt-4o")
+	if idx := strings.Index(modelName, ":"); idx > 0 {
+		return []string{strings.ToLower(modelName[:idx])}
+	}
+	if idx := strings.Index(modelName, "/"); idx > 0 {
+		return []string{strings.ToLower(modelName[:idx])}
+	}
+
 	providers := make([]string, 0, 4)
 	seen := make(map[string]struct{})
 

@@ -905,6 +905,14 @@ func (h *BaseAPIHandler) getRequestDetailsWithOptions(modelName string, allowIma
 		}
 	}
 
+	// Dynamic fix: strip provider prefix (e.g., "codex:gpt-4o" -> "gpt-4o")
+	// This ensures that the normalized model name sent to the provider executor is clean.
+	if idx := strings.Index(resolvedModelName, ":"); idx > 0 {
+		resolvedModelName = resolvedModelName[idx+1:]
+	} else if idx := strings.Index(resolvedModelName, "/"); idx > 0 {
+		resolvedModelName = resolvedModelName[idx+1:]
+	}
+
 	parsed := thinking.ParseSuffix(resolvedModelName)
 	baseModel := strings.TrimSpace(parsed.ModelName)
 

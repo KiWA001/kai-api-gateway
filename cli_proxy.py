@@ -164,18 +164,23 @@ LOCAL_SETTINGS_PATH = Path(os.getenv("KAI_LOCAL_SETTINGS_PATH", "/tmp/kai-api-se
 
 
 def cli_model_provider(model: str) -> str:
-    if model.startswith("antigravity-") or model.startswith("anti-gravity-"):
-        return "antigravity"
-    if model.startswith("codex-"):
-        return "codex"
-    if model.startswith("gemini-"):
-        return "gemini"
-    if model.startswith("claude-"):
-        return "claude"
-    if model.startswith("xai-"):
-        return "xai"
-    if model.startswith("kimi-"):
-        return "kimi"
+    """Identify the provider for a model string, supporting dynamic prefixes."""
+    # Check for explicit provider prefixes first (these designate the target session)
+    for prefix, info in AUTH_PROVIDERS.items():
+        if model.startswith(f"{prefix}-"):
+            return prefix
+            
+    # Check for aliased prefixes (e.g. anti-gravity-)
+    for alias, canonical in AUTH_PROVIDER_ALIASES.items():
+        if model.startswith(f"{alias}-"):
+            return canonical
+    
+    # Fallback: check against known aliases
+    if model in CLI_MODEL_ALIASES:
+        target = CLI_MODEL_ALIASES[model]
+        # Recursively check the target if it also has a prefix
+        return cli_model_provider(target)
+            
     return "cli"
 
 
@@ -295,22 +300,28 @@ async def cli_api_request(
 
 
 def resolve_cli_model(model: str | None) -> str:
+    """Resolve a model name, optionally encoding the provider for systemic routing."""
     if not model:
         return PUBLIC_CLI_MODEL_ALIASES[DEFAULT_ENABLED_CLI_MODELS[0]]
     
-    # Check aliases first for backward compatibility and specific mappings
+    # Check aliases first
     if model in CLI_MODEL_ALIASES:
-        return CLI_MODEL_ALIASES[model]
+        resolved = CLI_MODEL_ALIASES[model]
+        provider = cli_model_provider(model)
+        # If the alias mapped to a clean ID, re-attach the provider for systemic routing
+        if provider != "cli" and ":" not in resolved and "/" not in resolved:
+             return f"{provider}:{resolved}"
+        return resolved
     
-    # Handle dynamic prefixes: strip the provider prefix if present
-    prefixes = [
-        "antigravity-", "anti-gravity-", "codex-", 
-        "gemini-", "claude-", "xai-", "kimi-"
-    ]
-    for prefix in prefixes:
-        if model.startswith(prefix):
-            return model[len(prefix):]
-            
+    # Handle dynamic prefixes: detect provider and return in provider:model format
+    provider = cli_model_provider(model)
+    if provider != "cli":
+        # Strip the prefix to get the base model
+        prefixes = [f"{provider}-"] + [f"{a}-" for a, c in AUTH_PROVIDER_ALIASES.items() if c == provider]
+        for p in prefixes:
+            if model.startswith(p):
+                return f"{provider}:{model[len(p):]}"
+                
     return model
 
 

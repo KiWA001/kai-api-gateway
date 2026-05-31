@@ -329,6 +329,7 @@
             document.getElementById('cli-auth-url').value = authStates[id]?.url || '';
             document.getElementById('cli-redirect-url').value = '';
             setAuthStatus('');
+            renderCurl();
         }
 
         function setAuthStatus(msg, isError = false) {
