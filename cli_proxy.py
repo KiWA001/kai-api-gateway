@@ -158,6 +158,29 @@ CLI_MODEL_ALIASES: dict[str, str] = {
     **LEGACY_CLI_MODEL_ALIASES,
 }
 
+# Reverse map: target model name -> owning provider
+# e.g. "gemini-3.5-flash-low" -> "antigravity"  (NOT "gemini")
+# Built from PUBLIC_CLI_MODEL_ALIASES by resolving each key's provider
+def _build_reverse_alias_map() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for alias_key, target in PUBLIC_CLI_MODEL_ALIASES.items():
+        # Determine provider from the alias key (which always has clear prefixes)
+        provider = "cli"
+        for prefix in AUTH_PROVIDERS:
+            if alias_key.startswith(f"{prefix}-"):
+                provider = prefix
+                break
+        if provider == "cli":
+            for alias_pfx, canonical in AUTH_PROVIDER_ALIASES.items():
+                if alias_key.startswith(f"{alias_pfx}-"):
+                    provider = canonical
+                    break
+        if provider != "cli":
+            result[target] = provider
+    return result
+
+_REVERSE_ALIAS_MAP: dict[str, str] = _build_reverse_alias_map()
+
 MODEL_SETTINGS_KEY = "enabled_cli_models"
 DEFAULT_ENABLED_CLI_MODELS = list(PUBLIC_CLI_MODEL_ALIASES.keys())
 LOCAL_SETTINGS_PATH = Path(os.getenv("KAI_LOCAL_SETTINGS_PATH", "/tmp/kai-api-settings.json"))
@@ -165,22 +188,29 @@ LOCAL_SETTINGS_PATH = Path(os.getenv("KAI_LOCAL_SETTINGS_PATH", "/tmp/kai-api-se
 
 def cli_model_provider(model: str) -> str:
     """Identify the provider for a model string, supporting dynamic prefixes."""
-    # Check for explicit provider prefixes first (these designate the target session)
-    for prefix, info in AUTH_PROVIDERS.items():
+    # First: check if this is a known target of an aliased model (reverse lookup).
+    # This handles cases like "gemini-3.5-flash-low" which belongs to "antigravity",
+    # NOT the "gemini" provider, even though it starts with "gemini-".
+    if model in _REVERSE_ALIAS_MAP:
+        return _REVERSE_ALIAS_MAP[model]
+
+    # Check for explicit alias keys (forward lookup, catches both public and legacy)
+    if model in CLI_MODEL_ALIASES:
+        target = CLI_MODEL_ALIASES[model]
+        # Only recurse if the target differs (avoid infinite loop)
+        if target != model:
+            return cli_model_provider(target)
+
+    # Check for explicit provider prefixes (dynamic model names like "codex-gpt-custom")
+    for prefix in AUTH_PROVIDERS:
         if model.startswith(f"{prefix}-"):
             return prefix
-            
+
     # Check for aliased prefixes (e.g. anti-gravity-)
     for alias, canonical in AUTH_PROVIDER_ALIASES.items():
         if model.startswith(f"{alias}-"):
             return canonical
-    
-    # Fallback: check against known aliases
-    if model in CLI_MODEL_ALIASES:
-        target = CLI_MODEL_ALIASES[model]
-        # Recursively check the target if it also has a prefix
-        return cli_model_provider(target)
-            
+
     return "cli"
 
 
@@ -303,25 +333,33 @@ def resolve_cli_model(model: str | None) -> str:
     """Resolve a model name, optionally encoding the provider for systemic routing."""
     if not model:
         return PUBLIC_CLI_MODEL_ALIASES[DEFAULT_ENABLED_CLI_MODELS[0]]
-    
-    # Check aliases first
+
+    # Check forward aliases first (public + legacy)
     if model in CLI_MODEL_ALIASES:
         resolved = CLI_MODEL_ALIASES[model]
         provider = cli_model_provider(model)
-        # If the alias mapped to a clean ID, re-attach the provider for systemic routing
+        # Re-attach the provider for sidecar routing (e.g. "antigravity:gemini-3.5-flash-low")
         if provider != "cli" and ":" not in resolved and "/" not in resolved:
-             return f"{provider}:{resolved}"
+            return f"{provider}:{resolved}"
         return resolved
-    
+
+    # Check if this is itself a target model name (reverse alias lookup).
+    # e.g. someone calls the API directly with "gemini-3.5-flash-low" instead
+    # of "anti-gravity-gemini-3.5-flash-low".  We know the owning provider from
+    # the reverse map, so we can route correctly without stripping any prefix.
+    if model in _REVERSE_ALIAS_MAP:
+        provider = _REVERSE_ALIAS_MAP[model]
+        return f"{provider}:{model}"
+
     # Handle dynamic prefixes: detect provider and return in provider:model format
     provider = cli_model_provider(model)
     if provider != "cli":
-        # Strip the prefix to get the base model
+        # Strip the known prefix to get the bare model ID
         prefixes = [f"{provider}-"] + [f"{a}-" for a, c in AUTH_PROVIDER_ALIASES.items() if c == provider]
         for p in prefixes:
             if model.startswith(p):
                 return f"{provider}:{model[len(p):]}"
-                
+
     return model
 
 
